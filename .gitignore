@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# AI-Flow local data
+backend/checkpoints/
+backend/data/
+backend/uploads/
+backend/chroma_db/
