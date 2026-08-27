@@ -1,41 +1,12 @@
 import os
 
-defaultModel = "Gemma 4"
-
-existingModels = {
-    "Gemma 4": "google/gemma-4-e4b"
-}
-
 
 def resolveModel() -> str:
-    return resolveModelChain()[0]
-
-
-def isGeminiProvider() -> bool:
-    return bool(os.environ.get("GOOGLE_API_KEY", "").strip())
+    return os.environ.get("GOOGLE_MODEL", "").strip() or "gemini-3.5-flash"
 
 
 def resolveModelChain() -> list[str]:
-    override = os.environ.get("AI_MODEL", "").strip()
-
-    if isGeminiProvider():
-        primary = (
-            override
-            if override.startswith("gemini")
-            else os.environ.get("GOOGLE_MODEL", "").strip() or "gemini-3.5-flash"
-        )
-    else:
-        primary = override or existingModels[defaultModel]
-
-    chain = [primary]
-
-    extras = os.environ.get("AI_FALLBACK_MODELS", "")
-    for candidate in extras.split(","):
-        candidate = candidate.strip()
-        if candidate and candidate not in chain:
-            chain.append(candidate)
-
-    return chain
+    return [resolveModel()]
 
 systemPrompt = """
 You are AI Flow, a helpful, intelligent, professional, and concise AI assistant.

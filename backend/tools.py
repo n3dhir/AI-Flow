@@ -13,8 +13,6 @@ from langchain_tavily import TavilySearch
 from database import save_memory, search_memory
 from rag import retrieve_from_rag
 
-
-
 load_dotenv()
 
 
@@ -28,8 +26,6 @@ web_search = TavilySearch(
     topic="general",
     search_depth="advanced"
 )
-
-
 
 _ALLOWED_BINOPS = {
     ast.Add: operator.add,
@@ -123,7 +119,6 @@ def calculator(expression: str) -> str:
         return f"Calculation error: {str(e)}"
 
 
-
 @tool
 def get_weather(location: str) -> str:
     """
@@ -209,7 +204,6 @@ def get_weather(location: str) -> str:
         return f"Weather lookup failed: {str(e)}"
 
 
-
 @tool
 def current_time(timezone: str = "UTC") -> str:
     """
@@ -225,7 +219,6 @@ def current_time(timezone: str = "UTC") -> str:
         return f"Unknown timezone '{timezone}'. Use an IANA name like 'Africa/Tunis' or 'UTC'."
 
 
-
 @tool
 def search_uploaded_documents(query: str, config: RunnableConfig) -> str:
     """
@@ -237,8 +230,6 @@ def search_uploaded_documents(query: str, config: RunnableConfig) -> str:
         query=query,
         thread_id=get_thread_id(config)
     )
-
-
 
 
 @tool
@@ -254,7 +245,6 @@ def remember_this(memory: str, config: RunnableConfig) -> str:
     )
 
 
-
 @tool
 def recall_memory(query: str, config: RunnableConfig) -> str:
     """
@@ -265,9 +255,6 @@ def recall_memory(query: str, config: RunnableConfig) -> str:
         thread_id=get_thread_id(config),
         query=query
     )
-
-
-
 
 
 tools = [

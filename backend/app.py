@@ -35,8 +35,8 @@ from utils import resolveModelChain
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    if not os.environ.get("OPENROUTER_API_KEY"):
-        print("WARNING: OPENROUTER_API_KEY is not set — chat requests will fail.")
+    if not os.environ.get("GOOGLE_API_KEY"):
+        print("WARNING: GOOGLE_API_KEY is not set — chat requests will fail.")
     yield
 
 
@@ -140,7 +140,7 @@ def friendly_error(exc: Exception) -> str:
             "Options:\n"
             "- Wait for the quota reset\n"
             "- Top up credits or raise limits with your provider\n"
-            "- Or point `OPENAI_API_BASE_URL` / `AI_MODEL` in `backend/.env` at a different provider or model"
+            "- Or set `GOOGLE_MODEL` in `backend/.env` to a different Gemini model"
         )
 
     if "502" in message or "upstream" in message.lower() or "provider_error" in message:
@@ -148,8 +148,8 @@ def friendly_error(exc: Exception) -> str:
             "\n\n⚠️ **The LLM provider's upstream route failed** (not your request).\n\n"
             "Options:\n"
             "- Retry — transient upstream errors often clear in seconds\n"
-            "- Check your provider/router status or its configured keys and routes\n"
-            "- Or set `AI_MODEL` in `backend/.env` to another available model (e.g. `auto`)"
+            "- Check your provider status or its configured keys\n"
+            "- Or set `GOOGLE_MODEL` in `backend/.env` to another available Gemini model"
         )
 
     return f"\n\n⚠️ Stream failed: {message}"

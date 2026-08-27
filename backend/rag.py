@@ -29,7 +29,6 @@ vectorstore = Chroma(
 )
 
 
-
 def read_file_text(file_path: str) -> str:
     path = Path(file_path)
     suffix = path.suffix.lower()
@@ -55,8 +54,6 @@ def read_file_text(file_path: str) -> str:
         return path.read_text(encoding="utf-8", errors="ignore")
 
     raise ValueError("Unsupported file type. Upload PDF, DOCX, TXT, MD, PY, or CSV.")
-
-
 
 
 def delete_source_documents(thread_id: str, source: str):
@@ -104,9 +101,6 @@ def add_document_to_rag(file_path: str, thread_id: str):
         "filename": Path(file_path).name,
         "chunks": len(docs)
     }
-
-
-
 
 
 def retrieve_from_rag(query: str, thread_id: str, k: int = 4) -> str:
