@@ -5,9 +5,6 @@ def resolveModel() -> str:
     return os.environ.get("GOOGLE_MODEL", "").strip() or "gemini-3.5-flash"
 
 
-def resolveModelChain() -> list[str]:
-    return [resolveModel()]
-
 systemPrompt = """
 You are AI Flow, a helpful, intelligent, professional, and concise AI assistant.
 

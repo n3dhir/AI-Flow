@@ -29,7 +29,7 @@ from database import (
     save_chat_message,
 )
 from rag import add_document_to_rag, delete_thread_documents
-from utils import resolveModelChain
+from utils import resolveModel
 
 
 @asynccontextmanager
@@ -83,7 +83,7 @@ def purge_checkpoints(thread_id: str):
 
 @app.get("/api/model")
 def get_model():
-    return {"model": resolveModelChain()[0]}
+    return {"model": resolveModel()}
 
 
 @app.get("/api/conversations")
@@ -169,80 +169,74 @@ def chat(request: ChatRequest):
         interrupted = False
         completed = False
 
-        for model_name in resolveModelChain():
-            announced_tools: set[str] = set()
-            collected_attempt: list[str] = []
+        model_name = resolveModel()
+        announced_tools: set[str] = set()
 
-            def push(text: str):
-                collected_all.append(text)
-                collected_attempt.append(text)
+        def push(text: str):
+            collected_all.append(text)
 
-            try:
-                wf = get_agent(model_name)
+        try:
+            wf = get_agent(model_name)
 
-                yield sse({"meta": {"model": model_name}})
+            yield sse({"meta": {"model": model_name}})
 
-                for chunk, metadata in wf.stream(
-                    inputs,
-                    config=config,
-                    stream_mode="messages",
-                ):
-                    if isinstance(chunk, ToolMessage):
-                        name = chunk.name or "tool"
+            for chunk, metadata in wf.stream(
+                inputs,
+                config=config,
+                stream_mode="messages",
+            ):
+                if isinstance(chunk, ToolMessage):
+                    name = chunk.name or "tool"
 
-                        raw = chunk.content
-                        if isinstance(raw, list):
-                            raw = "".join(
-                                part.get("text", "")
-                                for part in raw
-                                if isinstance(part, dict)
-                            )
-
-                        preview = " ".join(str(raw).split())[:180]
-                        ok = getattr(chunk, "status", "success") != "error"
-
-                        announced_tools.discard(name)
-                        yield sse({"tool_end": {"name": name, "ok": ok, "preview": preview}})
-                        continue
-
-                    if not isinstance(chunk, AIMessageChunk):
-                        continue
-
-                    if metadata.get("langgraph_node") != "chat_node":
-                        continue
-
-                    for call_chunk in getattr(chunk, "tool_call_chunks", None) or []:
-                        name = call_chunk.get("name")
-                        if name and name not in announced_tools:
-                            announced_tools.add(name)
-                            yield sse({"tool_start": {"name": name}})
-
-                    text = chunk.content
-                    if isinstance(text, list):
-                        text = "".join(
+                    raw = chunk.content
+                    if isinstance(raw, list):
+                        raw = "".join(
                             part.get("text", "")
-                            for part in text
+                            for part in raw
                             if isinstance(part, dict)
                         )
 
-                    if not text:
-                        continue
+                    preview = " ".join(str(raw).split())[:180]
+                    ok = getattr(chunk, "status", "success") != "error"
 
-                    push(text)
-                    yield sse({"delta": text})
+                    announced_tools.discard(name)
+                    yield sse({"tool_end": {"name": name, "ok": ok, "preview": preview}})
+                    continue
 
-                completed = True
-                break
+                if not isinstance(chunk, AIMessageChunk):
+                    continue
 
-            except Exception as exc:
-                last_error = exc
+                if metadata.get("langgraph_node") != "chat_node":
+                    continue
 
-                if collected_attempt:
-                    yield sse({"delta": "\n\n⚠️ _Model connection dropped mid-answer._"})
-                    interrupted = True
-                    break
+                for call_chunk in getattr(chunk, "tool_call_chunks", None) or []:
+                    name = call_chunk.get("name")
+                    if name and name not in announced_tools:
+                        announced_tools.add(name)
+                        yield sse({"tool_start": {"name": name}})
 
-                continue
+                text = chunk.content
+                if isinstance(text, list):
+                    text = "".join(
+                        part.get("text", "")
+                        for part in text
+                        if isinstance(part, dict)
+                    )
+
+                if not text:
+                    continue
+
+                push(text)
+                yield sse({"delta": text})
+
+            completed = True
+
+        except Exception as exc:
+            last_error = exc
+
+            if collected_all:
+                yield sse({"delta": "\n\n⚠️ _Model connection dropped mid-answer._"})
+                interrupted = True
 
         if interrupted:
             pass
