@@ -11,6 +11,8 @@ from pydantic import BaseModel
 from agent import get_agent
 from auth import get_current_user
 from database import (
+    Conversation,
+    SessionLocal,
     create_or_update_conversation,
     delete_conversation,
     get_chat_history,
@@ -21,6 +23,19 @@ from rag import add_document_to_rag, delete_thread_documents
 from utils import resolveModel
 
 router = APIRouter(prefix="/api", tags=["chat"])
+
+
+def get_user_conversation(thread_id: str, user_id: int):
+    """Get conversation only if it belongs to the user."""
+    db = SessionLocal()
+    try:
+        return (
+            db.query(Conversation)
+            .filter(Conversation.thread_id == thread_id, Conversation.user_id == user_id)
+            .first()
+        )
+    finally:
+        db.close()
 
 
 class ChatRequest(BaseModel):
@@ -82,7 +97,7 @@ def get_model():
 
 @router.get("/conversations")
 def get_conversations(current_user=Depends(get_current_user)):
-    conversations = list_conversations()
+    conversations = list_conversations(user_id=current_user.id)
 
     return [
         {
@@ -96,6 +111,10 @@ def get_conversations(current_user=Depends(get_current_user)):
 
 @router.get("/conversations/{thread_id}/messages")
 def get_thread_messages(thread_id: str, current_user=Depends(get_current_user)):
+    conversation = get_user_conversation(thread_id, current_user.id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
     messages = get_chat_history(thread_id)
 
     return [
@@ -110,6 +129,10 @@ def get_thread_messages(thread_id: str, current_user=Depends(get_current_user)):
 
 @router.delete("/conversations/{thread_id}")
 def remove_conversation(thread_id: str, current_user=Depends(get_current_user)):
+    conversation = get_user_conversation(thread_id, current_user.id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
     delete_conversation(thread_id)
 
     try:
@@ -127,7 +150,7 @@ def remove_conversation(thread_id: str, current_user=Depends(get_current_user)):
 
 @router.post("/chat")
 def chat(request: ChatRequest, current_user=Depends(get_current_user)):
-    create_or_update_conversation(request.thread_id, first_message=request.message)
+    create_or_update_conversation(request.thread_id, user_id=current_user.id, first_message=request.message)
     save_chat_message(request.thread_id, "user", request.message)
 
     config = {"configurable": {"thread_id": request.thread_id}}
