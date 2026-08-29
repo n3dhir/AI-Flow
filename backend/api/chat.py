@@ -7,35 +7,23 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
-from agent import get_agent
-from auth import get_current_user
-from database import (
-    Conversation,
-    SessionLocal,
+from database import get_db
+from core.security import get_current_user
+from services import (
     create_or_update_conversation,
-    delete_conversation,
-    get_chat_history,
     list_conversations,
+    get_conversation,
+    delete_conversation,
     save_chat_message,
+    get_chat_history,
 )
-from rag import add_document_to_rag, delete_thread_documents
-from utils import resolveModel
+from agent.agent import get_agent
+from agent.rag import add_document_to_rag, delete_thread_documents
+from config import settings
 
 router = APIRouter(prefix="/api", tags=["chat"])
-
-
-def get_user_conversation(thread_id: str, user_id: int):
-    """Get conversation only if it belongs to the user."""
-    db = SessionLocal()
-    try:
-        return (
-            db.query(Conversation)
-            .filter(Conversation.thread_id == thread_id, Conversation.user_id == user_id)
-            .first()
-        )
-    finally:
-        db.close()
 
 
 class ChatRequest(BaseModel):
@@ -92,12 +80,12 @@ def friendly_error(exc: Exception) -> str:
 
 @router.get("/model")
 def get_model():
-    return {"model": resolveModel()}
+    return {"model": settings.google_model}
 
 
 @router.get("/conversations")
-def get_conversations(current_user=Depends(get_current_user)):
-    conversations = list_conversations(user_id=current_user.id)
+def get_conversations(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    conversations = list_conversations(db, current_user.id)
 
     return [
         {
@@ -110,12 +98,12 @@ def get_conversations(current_user=Depends(get_current_user)):
 
 
 @router.get("/conversations/{thread_id}/messages")
-def get_thread_messages(thread_id: str, current_user=Depends(get_current_user)):
-    conversation = get_user_conversation(thread_id, current_user.id)
+def get_thread_messages(thread_id: str, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    conversation = get_conversation(db, thread_id, current_user.id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    messages = get_chat_history(thread_id)
+    messages = get_chat_history(db, thread_id)
 
     return [
         {
@@ -128,12 +116,12 @@ def get_thread_messages(thread_id: str, current_user=Depends(get_current_user)):
 
 
 @router.delete("/conversations/{thread_id}")
-def remove_conversation(thread_id: str, current_user=Depends(get_current_user)):
-    conversation = get_user_conversation(thread_id, current_user.id)
+def remove_conversation(thread_id: str, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    conversation = get_conversation(db, thread_id, current_user.id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    delete_conversation(thread_id)
+    delete_conversation(db, thread_id)
 
     try:
         purge_checkpoints(thread_id)
@@ -149,9 +137,9 @@ def remove_conversation(thread_id: str, current_user=Depends(get_current_user)):
 
 
 @router.post("/chat")
-def chat(request: ChatRequest, current_user=Depends(get_current_user)):
-    create_or_update_conversation(request.thread_id, user_id=current_user.id, first_message=request.message)
-    save_chat_message(request.thread_id, "user", request.message)
+def chat(request: ChatRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    create_or_update_conversation(db, request.thread_id, current_user.id, first_message=request.message)
+    save_chat_message(db, request.thread_id, "user", request.message)
 
     config = {"configurable": {"thread_id": request.thread_id}}
     inputs = {"messages": [HumanMessage(content=request.message)]}
@@ -162,7 +150,7 @@ def chat(request: ChatRequest, current_user=Depends(get_current_user)):
         interrupted = False
         completed = False
 
-        model_name = resolveModel()
+        model_name = settings.google_model
         announced_tools: set[str] = set()
 
         def push(text: str):
@@ -239,7 +227,7 @@ def chat(request: ChatRequest, current_user=Depends(get_current_user)):
         full_reply = "".join(collected_all).strip()
         if full_reply:
             try:
-                save_chat_message(request.thread_id, "assistant", full_reply)
+                save_chat_message(db, request.thread_id, "assistant", full_reply)
             except Exception:
                 pass
 
@@ -256,7 +244,16 @@ def chat(request: ChatRequest, current_user=Depends(get_current_user)):
 
 
 @router.post("/upload")
-async def upload_document(thread_id: str = Form(...), file: UploadFile = File(...), current_user=Depends(get_current_user)):
+async def upload_document(
+    thread_id: str = Form(...),
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    conversation = get_conversation(db, thread_id, current_user.id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
     suffix = Path(file.filename or "").suffix.lower()
 
     if suffix not in ALLOWED_UPLOAD_SUFFIXES:

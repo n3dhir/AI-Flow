@@ -10,8 +10,7 @@ from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
 from langchain_tavily import TavilySearch
 
-from database import save_memory, search_memory
-from rag import retrieve_from_rag
+from agent.rag import retrieve_from_rag
 
 load_dotenv()
 
@@ -238,11 +237,18 @@ def remember_this(memory: str, config: RunnableConfig) -> str:
     Save an important user preference or fact into long-term memory.
     Use this when the user asks you to remember something.
     """
+    from services.conversation_service import save_memory
+    from database import SessionLocal
 
-    return save_memory(
-        thread_id=get_thread_id(config),
-        memory=memory
-    )
+    db = SessionLocal()
+    try:
+        return save_memory(
+            db=db,
+            thread_id=get_thread_id(config),
+            memory=memory
+        )
+    finally:
+        db.close()
 
 
 @tool
@@ -250,11 +256,18 @@ def recall_memory(query: str, config: RunnableConfig) -> str:
     """
     Recall saved long-term memories about the user or this conversation.
     """
+    from services.conversation_service import search_memory
+    from database import SessionLocal
 
-    return search_memory(
-        thread_id=get_thread_id(config),
-        query=query
-    )
+    db = SessionLocal()
+    try:
+        return search_memory(
+            db=db,
+            thread_id=get_thread_id(config),
+            query=query
+        )
+    finally:
+        db.close()
 
 
 tools = [
