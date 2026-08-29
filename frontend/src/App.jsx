@@ -5,7 +5,8 @@ import Message from './components/Message.jsx'
 import Composer from './components/Composer.jsx'
 import EmptyState from './components/EmptyState.jsx'
 import Toasts from './components/Toasts.jsx'
-import { listConversations, getMessages, deleteConversation, uploadDocument, streamChat, getModel } from './lib/api.js'
+import Login from './components/Login.jsx'
+import { listConversations, getMessages, deleteConversation, uploadDocument, streamChat, getModel, getToken, logout, getMe } from './lib/api.js'
 
 const THREAD_KEY = 'aiflow.activeThread'
 
@@ -13,14 +14,18 @@ let toastSeq = 0
 
 function HistorySkeleton() {
   return (
-    <div className="skel-wrap" aria-hidden="true">
-      <div className="skel skel--60" /><div className="skel skel--40" /><div className="skel skel--72" />
+    <div className="max-w-[764px] mx-auto pt-10 px-5 pb-4 flex flex-col gap-3.5" aria-hidden="true">
+      <div className="h-[15px] rounded-[7px] bg-gradient-to-r from-white/5 via-white/10 to-[length:240%_100%] animate-[shimmer_1.5s_linear_infinite] w-[60%]" />
+      <div className="h-[15px] rounded-[7px] bg-gradient-to-r from-white/5 via-white/10 to-[length:240%_100%] animate-[shimmer_1.5s_linear_infinite] w-[40%]" />
+      <div className="h-[15px] rounded-[7px] bg-gradient-to-r from-white/5 via-white/10 to-[length:240%_100%] animate-[shimmer_1.5s_linear_infinite] w-[72%]" />
     </div>
   )
 }
 
 export default function App() {
   const [booted, setBooted] = useState(false)
+  const [authenticated, setAuthenticated] = useState(false)
+  const [authChecking, setAuthChecking] = useState(true)
   const [threads, setThreads] = useState([])
   const [activeId, setActiveId] = useState(() => localStorage.getItem(THREAD_KEY) || null)
   const [messages, setMessages] = useState([])
@@ -29,7 +34,7 @@ export default function App() {
   const [streaming, setStreaming] = useState(false)
   const [upload, setUpload] = useState(null)
   const [toasts, setToasts] = useState([])
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [draft, setDraft] = useState('')
   const [modelName, setModelName] = useState('')
   const hostLabel = modelName.includes('gemini') ? 'google ai' : modelName ? 'frellmapi' : ''
@@ -38,6 +43,34 @@ export default function App() {
   const scrollRef = useRef(null)
   const stickRef = useRef(true)
   const composerRef = useRef(null)
+
+  const handleAuth = useCallback(() => {
+    setAuthenticated(true)
+    setAuthChecking(false)
+  }, [])
+
+  const handleLogout = useCallback(() => {
+    logout()
+    setAuthenticated(false)
+    setThreads([])
+    setMessages([])
+    setActiveId(null)
+    localStorage.removeItem(THREAD_KEY)
+  }, [])
+
+  useEffect(() => {
+    if (getToken()) {
+      getMe()
+        .then(() => setAuthenticated(true))
+        .catch(() => {
+          logout()
+          setAuthenticated(false)
+        })
+        .finally(() => setAuthChecking(false))
+    } else {
+      setAuthChecking(false)
+    }
+  }, [])
 
   const toast = useCallback((message, kind = 'info', ttl = 4500) => {
     const id = ++toastSeq
@@ -107,12 +140,10 @@ export default function App() {
 
   const selectThread = (id) => {
     if (id === activeId) {
-      setSidebarOpen(false)
       return
     }
     setActiveId(id)
     localStorage.setItem(THREAD_KEY, id)
-    setSidebarOpen(false)
     loadHistory(id)
   }
 
@@ -222,9 +253,30 @@ export default function App() {
     }
   }
 
+  if (authChecking) {
+    return (
+      <div className="flex items-center justify-center min-h-full h-full bg-bg">
+        <div className="font-display text-2xl text-accent">AI Flow</div>
+      </div>
+    )
+  }
+
+  if (!authenticated) {
+    return <Login onAuth={handleAuth} />
+  }
+
   return (
-    <div className={`app${booted ? ' is-booted' : ''}`}>
-      <div className="flowline" aria-hidden="true" />
+    <div className="relative flex h-dvh">
+      {/* Shared gradient defs - always in DOM */}
+      <svg width="0" height="0" className="absolute" aria-hidden="true">
+        <defs>
+          <linearGradient id="flowgrad" x1="0" y1="0" x2="32" y2="0" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#5ce8c5" />
+            <stop offset="1" stopColor="#9db8ff" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <div className="absolute top-0 left-0 right-0 h-[2px] z-[60] bg-gradient-to-r from-transparent via-accent/70 to-[length:220%_100%] animate-flow" aria-hidden="true" />
 
       <Sidebar
         threads={threads}
@@ -235,13 +287,14 @@ export default function App() {
         onSelect={selectThread}
         onNew={startNew}
         onDelete={removeThread}
+        onLogout={handleLogout}
         hostName={hostLabel}
       />
 
-      <main className="chat">
+      <main className="relative flex-1 min-w-0 flex flex-col bg-bg">
         <ChatHeader threadId={activeId} status={status} modelName={modelName} hostName={hostLabel} onToggleSidebar={() => setSidebarOpen((v) => !v)} />
 
-        <div className="chat-scroll" ref={scrollRef} onScroll={onScroll}>
+        <div className="relative flex-1 overflow-y-auto" ref={scrollRef} onScroll={onScroll}>
           {historyLoading ? (
             <HistorySkeleton />
           ) : messages.length === 0 ? (
@@ -252,7 +305,7 @@ export default function App() {
               }}
             />
           ) : (
-            <div className="thread">
+            <div className="max-w-[764px] mx-auto py-[34px] px-5.5 flex flex-col gap-[26px]">
               {messages.map((m) => (
                 <Message key={m.id} message={m} streaming={streaming && m.role === 'assistant' && m === messages[messages.length - 1]} />
               ))}
