@@ -2,12 +2,26 @@ import FlowMark from './FlowMark.jsx'
 import { timeAgo } from '../lib/time.js'
 
 function StatusDot({ status }) {
+  const colors = {
+    online: 'bg-accent shadow-[0_0_8px_var(--color-accent-glow)]',
+    connecting: 'bg-amber animate-pulse',
+    offline: 'bg-danger',
+  }
+  const labels = {
+    online: 'backend online',
+    connecting: 'connecting',
+    offline: 'offline',
+  }
+  const textColors = {
+    online: 'text-accent',
+    connecting: 'text-amber',
+    offline: 'text-danger',
+  }
+
   return (
-    <span className={`status status--${status}`}>
-      <span className="status__dot" />
-      <span className="status__label">
-        {status === 'online' ? 'backend online' : status === 'connecting' ? 'connecting' : 'offline'}
-      </span>
+    <span className="flex items-center gap-2 font-mono text-[11px]">
+      <span className={`w-[7px] h-[7px] rounded-full ${colors[status]}`} />
+      <span className={textColors[status]}>{labels[status]}</span>
     </span>
   )
 }
@@ -21,45 +35,59 @@ export default function Sidebar({
   onSelect,
   onNew,
   onDelete,
+  onLogout,
   hostName,
 }) {
   return (
     <>
-      <div className={`sidebar-backdrop${open ? ' is-open' : ''}`} onClick={onClose} aria-hidden="true" />
-      <aside className={`sidebar${open ? ' is-open' : ''}`}>
-        <div className="sidebar__brand">
+      {/* Mobile backdrop */}
+      {open && (
+        <div
+          className="fixed inset-0 z-30 bg-[rgba(4,6,10,0.55)] md:hidden"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside className={`w-[274px] shrink-0 flex-col bg-panel border-r border-hairline z-40 ${open ? 'flex' : 'hidden'} fixed top-0 bottom-0 left-0 md:relative md:z-auto`}>
+        <div className="flex items-center gap-[11px] pt-5 pb-3.5 px-[18px] animate-rise">
           <FlowMark size={28} />
-          <div className="brand-lockup">
-            <span className="brand-name">AI&nbsp;Flow</span>
-            <span className="brand-sub">local intelligence deck</span>
+          <div className="flex flex-col leading-[1.15]">
+            <span className="font-display italic text-[23px] tracking-wide">AI&nbsp;Flow</span>
+            <span className="font-mono text-[9.5px] tracking-[0.14em] uppercase text-text-faint">local intelligence deck</span>
           </div>
         </div>
 
-        <button className="new-chat" onClick={onNew}>
+        <button
+          className="flex items-center gap-2.5 mx-3.5 mt-1.5 mb-1 py-2.5 px-3.5 border border-hairline-strong rounded-xl text-text-dim text-[13.5px] font-medium tracking-wide transition-all hover:border-accent-glow hover:text-accent hover:bg-accent-dim hover:-translate-y-px animate-rise"
+          onClick={onNew}
+        >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
             <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
           </svg>
           New conversation
         </button>
 
-        <div className="sidebar__section-label">Threads</div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-faint mt-[18px] mx-5 mb-2">Threads</div>
 
-        <nav className="thread-list">
+        <nav className="flex-1 overflow-y-auto px-2.5 pb-3">
           {threads.length === 0 && (
-            <p className="thread-list__empty">No conversations yet.<br />Start one — it lands here.</p>
+            <p className="mx-2.5 my-3.5 text-[13px] leading-relaxed text-text-faint">No conversations yet.<br />Start one — it lands here.</p>
           )}
-          {threads.map((t) => (
+          {threads.map((t, i) => (
             <button
               key={t.thread_id}
-              className={`thread-item${t.thread_id === activeId ? ' is-active' : ''}`}
+              className={`group relative grid grid-cols-[auto_1fr_auto_auto] items-center gap-2 w-full py-2.5 px-2.5 rounded-[10px] text-left transition-colors hover:bg-white/[0.04] animate-rise ${t.thread_id === activeId ? 'bg-accent-dim' : ''}`}
+              style={{ animationDelay: `${0.16 + i * 0.05}s` }}
               onClick={() => onSelect(t.thread_id)}
               title={t.title}
             >
-              <span className="thread-item__rail" />
-              <span className="thread-item__title">{t.title || 'Untitled'}</span>
-              <span className="thread-item__time">{timeAgo(t.updated_at)}</span>
+              <span className={`w-[3px] h-4 rounded-sm transition-colors ${(t.thread_id === activeId) ? 'bg-accent' : 'bg-transparent'}`} />
+              <span className={`text-[13.5px] truncate ${t.thread_id === activeId ? 'text-text' : 'text-text-dim'}`}>{t.title || 'Untitled'}</span>
+              <span className="font-mono text-[10px] text-text-faint">{timeAgo(t.updated_at)}</span>
               <span
-                className="thread-item__delete"
+                className="grid place-items-center w-5 h-5 rounded-md text-text-faint opacity-0 hover:text-danger hover:bg-danger/10 transition-all group-hover:opacity-100"
                 role="button"
                 tabIndex={-1}
                 aria-label="Delete conversation"
@@ -76,9 +104,14 @@ export default function Sidebar({
           ))}
         </nav>
 
-        <footer className="sidebar__footer">
+        <footer className="border-t border-hairline py-3 px-[18px] flex flex-col gap-1.5 animate-fade">
           <StatusDot status={status} />
-          <span className="footer-meta">{hostName ? `via ${hostName}` : ''}</span>
+          <span className="font-mono text-[10px] tracking-wide text-text-faint">{hostName ? `via ${hostName}` : ''}</span>
+          <button className="absolute right-4 bottom-4 text-text-faint hover:text-text transition-colors" onClick={onLogout} title="Sign out">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M5 2H3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2M7 9l3-3-3-3M10 6H4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         </footer>
       </aside>
     </>
