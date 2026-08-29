@@ -22,6 +22,7 @@ class Conversation(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     thread_id = Column(String, unique=True, index=True)
+    user_id = Column(Integer, index=True, nullable=True)
     title = Column(String, default="New Chat")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
@@ -59,7 +60,7 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
 
-def create_or_update_conversation(thread_id: str, first_message: str | None = None):
+def create_or_update_conversation(thread_id: str, user_id: int, first_message: str | None = None):
     db = SessionLocal()
 
     try:
@@ -79,6 +80,7 @@ def create_or_update_conversation(thread_id: str, first_message: str | None = No
 
             conversation = Conversation(
                 thread_id=thread_id,
+                user_id=user_id,
                 title=title,
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -95,12 +97,13 @@ def create_or_update_conversation(thread_id: str, first_message: str | None = No
         db.close()
 
 
-def list_conversations():
+def list_conversations(user_id: int):
     db = SessionLocal()
 
     try:
         return (
             db.query(Conversation)
+            .filter(Conversation.user_id == user_id)
             .order_by(Conversation.updated_at.desc())
             .all()
         )
