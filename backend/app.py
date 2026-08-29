@@ -12,7 +12,7 @@ load_dotenv()
 os.environ["SSL_CERT_FILE"] = certifi.where()
 os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -20,7 +20,9 @@ from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
 from pydantic import BaseModel
 
 from agent import get_agent
+from auth import Token, UserLogin, UserRegister, get_current_user, hash_password, verify_password, create_access_token
 from database import (
+    User,
     create_or_update_conversation,
     delete_conversation,
     get_chat_history,
@@ -83,8 +85,41 @@ def get_model():
     return {"model": resolveModel()}
 
 
+@app.post("/api/register")
+def register(request: UserRegister, db=Depends(get_db)):
+    existing = db.query(User).filter(User.email == request.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    user = User(
+        email=request.email,
+        password_hash=hash_password(request.password)
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    token = create_access_token(data={"sub": user.id})
+    return Token(access_token=token)
+
+
+@app.post("/api/login")
+def login(request: UserLogin, db=Depends(get_db)):
+    user = db.query(User).filter(User.email == request.email).first()
+    if not user or not verify_password(request.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    token = create_access_token(data={"sub": user.id})
+    return Token(access_token=token)
+
+
+@app.get("/api/me")
+def me(current_user=Depends(get_current_user)):
+    return {"id": current_user.id, "email": current_user.email}
+
+
 @app.get("/api/conversations")
-def get_conversations():
+def get_conversations(current_user=Depends(get_current_user)):
     conversations = list_conversations()
 
     return [
@@ -98,7 +133,7 @@ def get_conversations():
 
 
 @app.get("/api/conversations/{thread_id}/messages")
-def get_thread_messages(thread_id: str):
+def get_thread_messages(thread_id: str, current_user=Depends(get_current_user)):
     messages = get_chat_history(thread_id)
 
     return [
@@ -112,7 +147,7 @@ def get_thread_messages(thread_id: str):
 
 
 @app.delete("/api/conversations/{thread_id}")
-def remove_conversation(thread_id: str):
+def remove_conversation(thread_id: str, current_user=Depends(get_current_user)):
     delete_conversation(thread_id)
 
     try:
@@ -153,7 +188,7 @@ def friendly_error(exc: Exception) -> str:
 
 
 @app.post("/api/chat")
-def chat(request: ChatRequest):
+def chat(request: ChatRequest, current_user=Depends(get_current_user)):
     create_or_update_conversation(request.thread_id, first_message=request.message)
     save_chat_message(request.thread_id, "user", request.message)
 
@@ -260,7 +295,7 @@ def chat(request: ChatRequest):
 
 
 @app.post("/api/upload")
-async def upload_document(thread_id: str = Form(...), file: UploadFile = File(...)):
+async def upload_document(thread_id: str = Form(...), file: UploadFile = File(...), current_user=Depends(get_current_user)):
     suffix = Path(file.filename or "").suffix.lower()
 
     if suffix not in ALLOWED_UPLOAD_SUFFIXES:
