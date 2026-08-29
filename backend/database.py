@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -56,8 +57,30 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+def _migrate_db():
+    """Apply incremental migrations to existing database."""
+    import sqlite3
+
+    db_path = "data/chatbot_memory.db"
+    if not os.path.exists(db_path):
+        return
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("PRAGMA table_info(conversations)")
+    columns = [col[1] for col in cursor.fetchall()]
+
+    if "user_id" not in columns:
+        cursor.execute("ALTER TABLE conversations ADD COLUMN user_id INTEGER")
+        conn.commit()
+
+    conn.close()
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
+    _migrate_db()
 
 
 def create_or_update_conversation(thread_id: str, user_id: int, first_message: str | None = None):
