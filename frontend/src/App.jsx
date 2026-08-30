@@ -128,6 +128,12 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    if (authenticated) {
+      refreshThreads()
+    }
+  }, [authenticated])
+
+  useEffect(() => {
     const el = scrollRef.current
     if (el && stickRef.current) el.scrollTop = el.scrollHeight
   }, [messages])
