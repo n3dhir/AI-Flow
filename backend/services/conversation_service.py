@@ -51,11 +51,12 @@ def delete_conversation(db: Session, thread_id: str):
     db.commit()
 
 
-def save_chat_message(db: Session, thread_id: str, role: str, content: str):
+def save_chat_message(db: Session, thread_id: str, role: str, content: str, tools: list | None = None):
     msg = ChatMessage(
         thread_id=thread_id,
         role=role,
         content=content,
+        tools=tools or [],
         created_at=datetime.now(timezone.utc),
     )
     db.add(msg)
