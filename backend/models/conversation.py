@@ -12,8 +12,8 @@ class Conversation(Base):
     thread_id = Column(String, unique=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
     title = Column(String, default="New Chat")
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class ChatMessage(Base):
@@ -23,7 +23,7 @@ class ChatMessage(Base):
     thread_id = Column(String, index=True)
     role = Column(String)
     content = Column(Text)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class LongTermMemory(Base):
@@ -32,4 +32,4 @@ class LongTermMemory(Base):
     id = Column(Integer, primary_key=True, index=True)
     thread_id = Column(String, index=True)
     memory = Column(Text)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

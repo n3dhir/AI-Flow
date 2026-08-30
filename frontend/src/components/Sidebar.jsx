@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import FlowMark from './FlowMark.jsx'
 import { timeAgo } from '../lib/time.js'
 
@@ -38,8 +39,12 @@ export default function Sidebar({
   onLogout,
   hostName,
 }) {
-  return (
-    <>
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 60000)
+    return () => clearInterval(id)
+  }, [])
+    return <>
       {/* Mobile backdrop */}
       {open && (
         <div
@@ -115,5 +120,5 @@ export default function Sidebar({
         </footer>
       </aside>
     </>
-  )
+  
 }
