@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Database
-    database_url: str = "sqlite:///data/chatbot_memory.db"
+    database_url: str = "postgresql://postgres:postgres@localhost:5432/aiflow"
 
     # JWT
     jwt_secret_key: str = "change-me-in-production"
