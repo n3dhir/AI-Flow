@@ -111,6 +111,7 @@ def get_thread_messages(thread_id: str, current_user=Depends(get_current_user), 
         {
             "role": m.role,
             "content": m.content,
+            "tools": m.tools or [],
             "created_at": m.created_at.isoformat(),
         }
         for m in messages
@@ -154,6 +155,7 @@ def chat(request: ChatRequest, current_user=Depends(get_current_user), db: Sessi
         completed = False
 
         model_name = settings.google_model
+        collected_tools: list[dict] = []
         announced_tools: set[str] = set()
 
         def push(text: str):
@@ -183,6 +185,12 @@ def chat(request: ChatRequest, current_user=Depends(get_current_user), db: Sessi
                     preview = " ".join(str(raw).split())[:180]
                     ok = getattr(chunk, "status", "success") != "error"
 
+                    if name in announced_tools:
+                        for t in collected_tools:
+                            if t["name"] == name and t["status"] == "running":
+                                t["status"] = "done" if ok else "error"
+                                t["preview"] = preview
+                                break
                     announced_tools.discard(name)
                     yield sse({"tool_end": {"name": name, "ok": ok, "preview": preview}})
                     continue
@@ -197,6 +205,7 @@ def chat(request: ChatRequest, current_user=Depends(get_current_user), db: Sessi
                     name = call_chunk.get("name")
                     if name and name not in announced_tools:
                         announced_tools.add(name)
+                        collected_tools.append({"name": name, "status": "running", "preview": ""})
                         yield sse({"tool_start": {"name": name}})
 
                 text = chunk.content
@@ -218,6 +227,12 @@ def chat(request: ChatRequest, current_user=Depends(get_current_user), db: Sessi
         except Exception as exc:
             last_error = exc
 
+            for t in collected_tools:
+                if t["status"] == "running":
+                    t["status"] = "error"
+                    t["preview"] = "interrupted"
+                    yield sse({"tool_end": {"name": t["name"], "ok": False, "preview": "interrupted"}})
+
             if collected_all:
                 yield sse({"delta": "\n\n⚠️ _Model connection dropped mid-answer._"})
                 interrupted = True
@@ -228,9 +243,9 @@ def chat(request: ChatRequest, current_user=Depends(get_current_user), db: Sessi
             yield sse({"delta": friendly_error(last_error)})
 
         full_reply = "".join(collected_all).strip()
-        if full_reply:
+        if full_reply or collected_tools:
             try:
-                save_chat_message(db, request.thread_id, "assistant", full_reply)
+                save_chat_message(db, request.thread_id, "assistant", full_reply, tools=collected_tools)
                 db.commit()
             except Exception:
                 db.rollback()

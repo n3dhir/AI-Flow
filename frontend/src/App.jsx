@@ -100,7 +100,7 @@ export default function App() {
       const data = await getMessages(id)
       const clean = data
         .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m, i) => ({ id: `${m.created_at}-${i}`, role: m.role, content: m.content, ts: m.created_at }))
+        .map((m, i) => ({ id: `${m.created_at}-${i}`, role: m.role, content: m.content, tools: m.tools || [], ts: m.created_at }))
       setMessages(clean)
       stickRef.current = true
     } catch {
