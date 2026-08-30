@@ -1,21 +1,39 @@
 from pathlib import Path
 from typing import List
 
-from langchain_chroma import Chroma
 from langchain_core.documents import Document
+from langchain_postgres import PGVector
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from pypdf import PdfReader
 from docx import Document as DocxDocument
 
+from config import settings
 
 Path("uploads").mkdir(exist_ok=True)
-Path("chroma_db").mkdir(exist_ok=True)
 
-vectorstore = Chroma(
+vectorstore = PGVector(
+    connection=settings.database_url,
     collection_name="agentic_chatbot_docs",
-    persist_directory="chroma_db"
+    embeddings=None,
 )
+
+
+def get_embeddings():
+    from langchain_google_genai import GoogleGenerativeAIEmbeddings
+    return GoogleGenerativeAIEmbeddings(
+        model="models/gemini-embedding-001",
+        google_api_key=settings.google_api_key,
+    )
+
+
+def init_vectorstore():
+    global vectorstore
+    vectorstore = PGVector(
+        connection=settings.database_url,
+        collection_name="agentic_chatbot_docs",
+        embeddings=get_embeddings(),
+    )
 
 
 def read_file_text(file_path: str) -> str:
@@ -41,16 +59,27 @@ def read_file_text(file_path: str) -> str:
 
 
 def delete_source_documents(thread_id: str, source: str):
-    vectorstore._chroma_collection.delete(
-        where={"$and": [{"thread_id": thread_id}, {"source": source}]}
+    store = _get_store()
+    store.delete(
+        filter={"$and": [{"thread_id": {"$eq": thread_id}}, {"source": {"$eq": source}}]}
     )
 
 
 def delete_thread_documents(thread_id: str):
-    vectorstore._chroma_collection.delete(where={"thread_id": thread_id})
+    store = _get_store()
+    store.delete(filter={"thread_id": {"$eq": thread_id}})
+
+
+def _get_store():
+    global vectorstore
+    if vectorstore.embeddings is None:
+        init_vectorstore()
+    return vectorstore
 
 
 def add_document_to_rag(file_path: str, thread_id: str):
+    store = _get_store()
+
     text = read_file_text(file_path)
 
     if not text.strip():
@@ -67,13 +96,14 @@ def add_document_to_rag(file_path: str, thread_id: str):
         for chunk in chunks
     ]
 
-    vectorstore.add_documents(docs)
+    store.add_documents(docs)
 
     return {"filename": Path(file_path).name, "chunks": len(docs)}
 
 
 def retrieve_from_rag(query: str, thread_id: str, k: int = 4) -> str:
-    docs = vectorstore.similarity_search(query, k=k, filter={"thread_id": thread_id})
+    store = _get_store()
+    docs = store.similarity_search(query, k=k, filter={"thread_id": thread_id})
 
     if not docs:
         return "No relevant uploaded document content found."
