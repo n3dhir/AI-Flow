@@ -73,6 +73,14 @@ def friendly_error(exc: Exception) -> str:
     return f"\n\n⚠️ Stream failed: {message}"
 
 
+def to_iso(dt):
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.isoformat() + "Z"
+    return dt.isoformat()
+
+
 @router.get("/model")
 def get_model():
     return {"model": settings.google_model}
@@ -86,7 +94,7 @@ def get_conversations(current_user=Depends(get_current_user), db: Session = Depe
         {
             "thread_id": c.thread_id,
             "title": c.title,
-            "updated_at": c.updated_at.isoformat(),
+            "updated_at": to_iso(c.updated_at),
         }
         for c in conversations
     ]
@@ -104,7 +112,7 @@ def get_thread_messages(thread_id: str, current_user=Depends(get_current_user), 
         {
             "role": m.role,
             "content": m.content,
-            "created_at": m.created_at.isoformat(),
+            "created_at": to_iso(m.created_at),
         }
         for m in messages
     ]
