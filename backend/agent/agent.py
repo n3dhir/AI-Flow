@@ -1,5 +1,4 @@
 import os
-import sqlite3
 from functools import lru_cache
 from pathlib import Path
 
@@ -7,13 +6,24 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage
 from langgraph.graph import StateGraph, START, END, MessagesState
 from langgraph.prebuilt import ToolNode, tools_condition
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.postgres import PostgresSaver
 
 from config import settings
 from agent.tools import tools
 from agent.utils import systemPrompt
 
-Path("checkpoints").mkdir(exist_ok=True)
+_pool = None
+
+
+def get_saver():
+    global _pool
+    if _pool is None:
+        from psycopg_pool import ConnectionPool
+        _pool = ConnectionPool(settings.database_url, max_size=20, kwargs={"autocommit": True, "prepare_threshold": 0})
+        saver = PostgresSaver(_pool)
+        saver.setup()
+        return saver
+    return PostgresSaver(_pool)
 
 
 def build_agent(model_name: str | None = None, temperature: float = 0.0):
@@ -46,8 +56,7 @@ def build_agent(model_name: str | None = None, temperature: float = 0.0):
     )
     workflow.add_edge("tool_node", "chat_node")
 
-    conn = sqlite3.connect("checkpoints/agent_checkpoint.db", check_same_thread=False)
-    saver = SqliteSaver(conn)
+    saver = get_saver()
 
     return workflow.compile(checkpointer=saver)
 

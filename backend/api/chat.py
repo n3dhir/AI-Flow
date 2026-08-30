@@ -1,11 +1,11 @@
 import json
-import sqlite3
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
+from psycopg import Connection
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -34,19 +34,26 @@ def sse(payload: dict) -> str:
 
 
 def purge_checkpoints(thread_id: str):
-    conn = sqlite3.connect("checkpoints/agent_checkpoint.db", check_same_thread=False)
     try:
-        tables = [
-            row[0]
-            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        ]
-        for table in tables:
-            columns = [col[1] for col in conn.execute(f"PRAGMA table_info({table})")]
-            if "thread_id" in columns:
-                conn.execute(f"DELETE FROM {table} WHERE thread_id = ?", (thread_id,))
-        conn.commit()
-    finally:
-        conn.close()
+        with Connection.connect(settings.database_url, autocommit=True) as conn:
+            tables = [
+                row[0]
+                for row in conn.execute(
+                    "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+                )
+            ]
+            for table in tables:
+                columns = [
+                    row[0]
+                    for row in conn.execute(
+                        "SELECT column_name FROM information_schema.columns WHERE table_name = %s",
+                        (table,)
+                    )
+                ]
+                if "thread_id" in columns:
+                    conn.execute(f'DELETE FROM "{table}" WHERE thread_id = %s', (thread_id,))
+    except Exception:
+        pass
 
 
 def friendly_error(exc: Exception) -> str:
@@ -73,6 +80,14 @@ def friendly_error(exc: Exception) -> str:
     return f"\n\n⚠️ Stream failed: {message}"
 
 
+def to_iso(dt):
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.isoformat() + "Z"
+    return dt.isoformat()
+
+
 @router.get("/model")
 def get_model():
     return {"model": settings.google_model}
@@ -86,7 +101,7 @@ def get_conversations(current_user=Depends(get_current_user), db: Session = Depe
         {
             "thread_id": c.thread_id,
             "title": c.title,
-            "updated_at": c.updated_at.isoformat(),
+            "updated_at": to_iso(c.updated_at),
         }
         for c in conversations
     ]
@@ -104,7 +119,7 @@ def get_thread_messages(thread_id: str, current_user=Depends(get_current_user), 
         {
             "role": m.role,
             "content": m.content,
-            "created_at": m.created_at.isoformat(),
+            "created_at": to_iso(m.created_at),
         }
         for m in messages
     ]
@@ -120,7 +135,7 @@ def remove_conversation(thread_id: str, current_user=Depends(get_current_user), 
 
     try:
         purge_checkpoints(thread_id)
-    except sqlite3.Error:
+    except Exception:
         pass
 
     try:
@@ -224,8 +239,9 @@ def chat(request: ChatRequest, current_user=Depends(get_current_user), db: Sessi
         if full_reply:
             try:
                 save_chat_message(db, request.thread_id, "assistant", full_reply)
+                db.commit()
             except Exception:
-                pass
+                db.rollback()
 
         yield "data: [DONE]\n\n"
 
