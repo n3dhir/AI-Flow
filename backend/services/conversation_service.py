@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -19,14 +19,12 @@ def create_or_update_conversation(db: Session, thread_id: str, user_id: int, fir
             thread_id=thread_id,
             user_id=user_id,
             title=title,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
         db.add(conversation)
     else:
-        conversation.updated_at = datetime.utcnow()
-
-    db.commit()
+        conversation.updated_at = datetime.now(timezone.utc)
 
 
 def list_conversations(db: Session, user_id: int) -> list[Conversation]:
@@ -58,15 +56,13 @@ def save_chat_message(db: Session, thread_id: str, role: str, content: str):
         thread_id=thread_id,
         role=role,
         content=content,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     db.add(msg)
 
     conversation = db.query(Conversation).filter(Conversation.thread_id == thread_id).first()
     if conversation:
-        conversation.updated_at = datetime.utcnow()
-
-    db.commit()
+        conversation.updated_at = datetime.now(timezone.utc)
 
 
 def get_chat_history(db: Session, thread_id: str) -> list[ChatMessage]:
@@ -82,7 +78,7 @@ def save_memory(db: Session, thread_id: str, memory: str):
     item = LongTermMemory(
         thread_id=thread_id,
         memory=memory,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     db.add(item)
     db.commit()

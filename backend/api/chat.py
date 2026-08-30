@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -22,13 +21,9 @@ from services import (
 from agent.agent import get_agent
 from agent.rag import add_document_to_rag, delete_thread_documents
 from config import settings
+from schemas import ChatRequest
 
 router = APIRouter(prefix="/api", tags=["chat"])
-
-
-class ChatRequest(BaseModel):
-    thread_id: str
-    message: str
 
 
 ALLOWED_UPLOAD_SUFFIXES = {".pdf", ".docx", ".txt", ".md", ".py", ".csv"}
@@ -140,6 +135,7 @@ def remove_conversation(thread_id: str, current_user=Depends(get_current_user), 
 def chat(request: ChatRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     create_or_update_conversation(db, request.thread_id, current_user.id, first_message=request.message)
     save_chat_message(db, request.thread_id, "user", request.message)
+    db.commit()
 
     config = {"configurable": {"thread_id": request.thread_id}}
     inputs = {"messages": [HumanMessage(content=request.message)]}

@@ -153,7 +153,7 @@ export default function App() {
     localStorage.removeItem(THREAD_KEY)
     setMessages([])
     setDraft('')
-    setSidebarOpen(false)
+    if (window.innerWidth < 768) setSidebarOpen(false)
     composerRef.current?.focus()
   }
 
