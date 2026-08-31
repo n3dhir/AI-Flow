@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from typing import Tuple
 
 import bcrypt
 from fastapi import Depends, HTTPException
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session
 from config import settings
 from database import get_db
 from models.user import User
+from models.refresh_token import RefreshToken
 
 security = HTTPBearer()
 
@@ -27,6 +29,41 @@ def create_access_token(data: dict) -> str:
     expire = datetime.now(timezone.utc) + timedelta(hours=settings.access_token_expire_hours)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+
+
+def create_refresh_token(db: Session, user_id: int) -> str:
+    token = RefreshToken.generate_token()
+    expires_at = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
+    refresh_token = RefreshToken(
+        token=token,
+        user_id=user_id,
+        expires_at=expires_at,
+    )
+    db.add(refresh_token)
+    db.commit()
+    return token
+
+
+def verify_refresh_token(db: Session, token: str) -> RefreshToken:
+    refresh_token = db.query(RefreshToken).filter(
+        RefreshToken.token == token,
+        RefreshToken.revoked == False,
+    ).first()
+
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    if refresh_token.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+
+    return refresh_token
+
+
+def revoke_refresh_token(db: Session, token: str):
+    refresh_token = db.query(RefreshToken).filter(RefreshToken.token == token).first()
+    if refresh_token:
+        refresh_token.revoked = True
+        db.commit()
 
 
 def get_current_user(
