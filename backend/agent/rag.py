@@ -20,10 +20,9 @@ vectorstore = PGVector(
 
 
 def get_embeddings():
-    from langchain_google_genai import GoogleGenerativeAIEmbeddings
-    return GoogleGenerativeAIEmbeddings(
-        model="models/gemini-embedding-001",
-        google_api_key=settings.google_api_key,
+    from langchain_community.embeddings import FastEmbedEmbeddings
+    return FastEmbedEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
     )
 
 
