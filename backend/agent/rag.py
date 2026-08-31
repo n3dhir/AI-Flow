@@ -66,8 +66,12 @@ def delete_source_documents(thread_id: str, source: str):
 
 
 def delete_thread_documents(thread_id: str):
-    store = _get_store()
-    store.delete(filter={"thread_id": {"$eq": thread_id}})
+    from psycopg import Connection
+    with Connection.connect(settings.database_url, autocommit=True) as conn:
+        conn.execute(
+            "DELETE FROM langchain_pg_embedding WHERE cmetadata->>'thread_id' = %s",
+            (thread_id,),
+        )
 
 
 def _get_store():

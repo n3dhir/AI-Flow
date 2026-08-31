@@ -14,14 +14,12 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import init_db
 from config import settings
 from api import auth_router, chat_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
     if not settings.google_api_key:
         print("WARNING: GOOGLE_API_KEY is not set — chat requests will fail.")
     yield

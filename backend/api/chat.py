@@ -271,7 +271,8 @@ async def upload_document(
 ):
     conversation = get_conversation(db, thread_id, current_user.id)
     if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+        conversation = create_or_update_conversation(db, thread_id, current_user.id)
+        db.commit()
 
     suffix = Path(file.filename or "").suffix.lower()
 
