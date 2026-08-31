@@ -1,11 +1,13 @@
 import { memo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
 
 function Markdown({ text }) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeRaw]}
       components={{
         a: (props) => <a {...props} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2 hover:text-accent-deep" />,
         p: (props) => <p {...props} className="mb-3 leading-relaxed text-[14.5px]" />,
