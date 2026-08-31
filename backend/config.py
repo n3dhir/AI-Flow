@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     # API Keys
     google_api_key: str = ""
     google_model: str = "gemini-3.1-flash-lite"
+    groq_api_key: str = ""
+    groq_model: str = "openai/gpt-oss-120b"
     tavily_api_key: str = ""
 
     # LangSmith (optional)
