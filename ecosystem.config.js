@@ -3,7 +3,7 @@ module.exports = {
     name: 'aiflow-backend',
     script: 'backend/app.py',
     interpreter: 'venv/bin/python',
-    cwd: '/mnt/data/projects/AI-Flow',
+    cwd: '.',
     env: {
       PYTHONUNBUFFERED: '1',
     },
