@@ -38,6 +38,7 @@ const Composer = forwardRef(function Composer(
   }
 
   return (
+    <>
     <div className="py-2.5 px-5 md:py-2.5 md:px-5.5 pb-4">
       {upload && (
         <div className={`inline-flex items-center gap-2 mb-2 ml-1 py-1.5 px-[11px] border rounded-[9px] bg-elevated font-mono text-[11px] animate-rise ${upload.state === 'done' ? 'border-hairline text-accent' : upload.state === 'error' ? 'border-danger/40 text-danger' : 'border-hairline'}`}>
@@ -111,17 +112,18 @@ const Composer = forwardRef(function Composer(
             onClick={submit}
             disabled={!value.trim()}
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M2 8h11M9 3.5L13.5 8 9 12.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        )}
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M2 8h11M9 3.5L13.5 8 9 12.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="max-w-[764px] mx-auto mt-2.5 text-center font-mono text-[10px] tracking-wide text-text-faint">
         <kbd className="px-[5px] py-px border border-hairline rounded-[5px] bg-white/[0.03] border-b-2">Enter</kbd> send · <kbd className="px-[5px] py-px border border-hairline rounded-[5px] bg-white/[0.03] border-b-2">Shift+Enter</kbd> newline{streaming && <> · <kbd className="px-[5px] py-px border border-hairline rounded-[5px] bg-white/[0.03] border-b-2">Esc</kbd> stop</>}
       </div>
-    </div>
+    </>
   )
 })
 

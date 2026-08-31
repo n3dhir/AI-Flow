@@ -43,6 +43,15 @@ export default function App() {
   const scrollRef = useRef(null)
   const stickRef = useRef(true)
   const composerRef = useRef(null)
+  const lastMsg = messages[messages.length - 1]
+  const [canRetry, setCanRetry] = useState(false)
+
+  useEffect(() => {
+    if (streaming) return
+    const isEmpty = lastMsg?.role === 'assistant' && !lastMsg.content.trim()
+    const hasToolError = lastMsg?.tools?.some((t) => t.status === 'error')
+    setCanRetry(isEmpty || hasToolError)
+  }, [messages, streaming, lastMsg])
 
   const handleAuth = useCallback(() => {
     setAuthenticated(true)
@@ -241,6 +250,13 @@ export default function App() {
     }
   }
 
+  const retry = () => {
+    const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
+    if (lastUserMsg) {
+      send(lastUserMsg.content)
+    }
+  }
+
   const stop = () => abortRef.current?.abort()
 
   const pickFile = async (file) => {
@@ -313,7 +329,13 @@ export default function App() {
           ) : (
             <div className="max-w-[764px] mx-auto py-[34px] px-5.5 flex flex-col gap-[26px]">
               {messages.map((m) => (
-                <Message key={m.id} message={m} streaming={streaming && m.role === 'assistant' && m === messages[messages.length - 1]} />
+                <Message
+                  key={m.id}
+                  message={m}
+                  streaming={streaming && m.role === 'assistant' && m === messages[messages.length - 1]}
+                  canRetry={canRetry && m === messages[messages.length - 1]}
+                  onRetry={retry}
+                />
               ))}
             </div>
           )}
