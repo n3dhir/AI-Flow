@@ -3,6 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage
 from langgraph.graph import StateGraph, START, END, MessagesState
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -11,6 +12,34 @@ from langgraph.checkpoint.postgres import PostgresSaver
 from config import settings
 from agent.tools import tools
 from agent.utils import systemPrompt
+
+
+def build_model():
+    """Build LLM model, using Google as primary and Groq as fallback."""
+    try:
+        if settings.google_api_key:
+            llm = ChatGoogleGenerativeAI(
+                model=settings.google_model,
+                temperature=0.0,
+                google_api_key=settings.google_api_key,
+                max_retries=1,
+            )
+            # Test with a simple call
+            llm.invoke([SystemMessage(content="test")])
+            return llm, "google"
+    except Exception as e:
+        print(f"Google model failed, falling back to Groq: {e}")
+
+    if settings.groq_api_key:
+        llm = ChatGroq(
+            model=settings.groq_model,
+            temperature=0.0,
+            api_key=settings.groq_api_key,
+            max_retries=1,
+        )
+        return llm, "groq"
+
+    raise RuntimeError("No valid LLM provider configured")
 
 _pool = None
 
@@ -27,15 +56,7 @@ def get_saver():
 
 
 def build_agent(model_name: str | None = None, temperature: float = 0.0):
-    model_name = model_name or settings.google_model
-
-    llm = ChatGoogleGenerativeAI(
-        model=model_name,
-        temperature=temperature,
-        google_api_key=settings.google_api_key,
-        max_retries=1,
-    )
-
+    llm, provider = build_model()
     llm_with_tools = llm.bind_tools(tools)
 
     def chat_node(state: MessagesState):
