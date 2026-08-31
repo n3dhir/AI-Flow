@@ -13,8 +13,8 @@ function Thinking() {
   )
 }
 
-export default function Message({ message, streaming }) {
-  const { role, content, ts } = message
+export default function Message({ message, streaming, onRetry, canRetry }) {
+  const { role, content, ts, tools } = message
 
   if (role === 'user') {
     return (
@@ -27,8 +27,9 @@ export default function Message({ message, streaming }) {
     )
   }
 
-  const isEmpty = !content
+  const isEmpty = !content.trim()
   const showCaret = streaming && !isEmpty
+  const showActions = canRetry && !streaming && isEmpty
 
   return (
     <div className="flex gap-[15px] animate-[msgIn_0.32s_cubic-bezier(0.22,0.9,0.3,1)_both]">
@@ -36,7 +37,7 @@ export default function Message({ message, streaming }) {
         <FlowMark size={22} animated={streaming} />
       </div>
       <div className="min-w-0 flex-1">
-        <ToolTrail tools={message.tools} />
+        <ToolTrail tools={tools} />
         {isEmpty && streaming ? (
           <Thinking />
         ) : (
@@ -45,6 +46,20 @@ export default function Message({ message, streaming }) {
             {showCaret && (
               <span className="inline-block w-2 h-[1.05em] ml-[3px] align-text-bottom rounded-[1.5px] bg-accent animate-[caretBlink_1s_steps(2,start)_infinite]" />
             )}
+          </div>
+        )}
+        {showActions && (
+          <div className="flex items-center gap-2 mt-2">
+            <button
+              className="flex items-center gap-1.5 text-[12px] text-accent hover:text-accent-deep transition-colors"
+              onClick={onRetry}
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2v3.5H10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Retry
+            </button>
+            <span className="text-text-faint text-[11px]">or continue below</span>
           </div>
         )}
         <div className="font-mono text-[9.5px] tracking-[0.12em] text-text-faint mt-[7px]">
