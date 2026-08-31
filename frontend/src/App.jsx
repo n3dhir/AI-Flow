@@ -268,6 +268,7 @@ export default function App() {
       setUpload({ name: file.name, state: 'done', chunks: res.chunks })
       toast(`Indexed "${res.filename}" · ${res.chunks} chunks`, 'success')
       setTimeout(() => setUpload(null), 4000)
+      refreshThreads()
     } catch (e) {
       setUpload({ name: file.name, state: 'error' })
       toast(e.message || 'Upload failed.', 'error')

@@ -42,11 +42,11 @@ const Composer = forwardRef(function Composer(
     <div className="py-2.5 px-5 md:py-2.5 md:px-5.5 pb-4">
       {upload && (
         <div className={`inline-flex items-center gap-2 mb-2 ml-1 py-1.5 px-[11px] border rounded-[9px] bg-elevated font-mono text-[11px] animate-rise ${upload.state === 'done' ? 'border-hairline text-accent' : upload.state === 'error' ? 'border-danger/40 text-danger' : 'border-hairline'}`}>
-          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true" className={upload.state === 'uploading' ? 'animate-spin' : ''}>
             {upload.state === 'done' ? (
               <path d="M2.5 7.5l3 3 6-7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             ) : (
-              <path d="M12.5 7a5.5 5.5 0 1 1-1.6-3.9M12.5 2v3.5H9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className={upload.state === 'uploading' ? 'animate-spin' : ''} />
+              <path d="M12.5 7a5.5 5.5 0 1 1-1.6-3.9M12.5 2v3.5H9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
             )}
           </svg>
           <span className="max-w-[220px] truncate">{upload.name}</span>
