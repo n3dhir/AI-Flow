@@ -233,6 +233,8 @@ export default function App() {
     } catch (e) {
       if (e.name === 'AbortError') {
         append('\n\n_(stopped)_')
+      } else if (e.message.includes('Session expired')) {
+        handleLogout()
       } else {
         const failed = e.status ? `${e.message}` : `Cannot reach backend — ${e.message}`
         setMessages((prev) =>

@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
     access_token_expire_hours: int = 24
+    refresh_token_expire_days: int = 7
 
     # API Keys
     google_api_key: str = ""
