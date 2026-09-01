@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
@@ -17,6 +17,7 @@ from services import (
     delete_conversation,
     save_chat_message,
     get_chat_history,
+    search_chat_messages,
 )
 from agent.agent import get_agent
 from agent.rag import add_document_to_rag, delete_thread_documents
@@ -116,6 +117,16 @@ def get_thread_messages(thread_id: str, current_user=Depends(get_current_user), 
         }
         for m in messages
     ]
+
+
+@router.get("/conversations/search")
+def search_conversation_messages(
+    q: str = Query(..., min_length=1, description="Full-text search query"),
+    limit: int = Query(20, ge=1, le=100),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return search_chat_messages(db, current_user.id, q, limit=limit)
 
 
 @router.delete("/conversations/{thread_id}")

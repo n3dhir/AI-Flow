@@ -74,6 +74,7 @@ Open http://localhost:5173
 | GET | `/api/me` | Get current user |
 | GET | `/api/model` | Get active model |
 | GET | `/api/conversations` | List conversations |
+| GET | `/api/conversations/search?q=...` | Search conversation messages |
 | GET | `/api/conversations/{id}/messages` | Get messages |
 | DELETE | `/api/conversations/{id}` | Delete conversation |
 | POST | `/api/chat` | Send message (SSE stream) |

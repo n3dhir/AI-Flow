@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models.conversation import Conversation, ChatMessage, LongTermMemory
@@ -73,6 +74,72 @@ def get_chat_history(db: Session, thread_id: str) -> list[ChatMessage]:
         .order_by(ChatMessage.created_at.asc())
         .all()
     )
+
+
+def search_chat_messages(db: Session, user_id: int, query: str, limit: int = 50) -> list[dict]:
+    cleaned = query.strip() if query else ""
+    if not cleaned:
+        return []
+
+    capped_limit = max(1, min(limit, 100))
+    dialect_name = db.bind.dialect.name if db.bind else ""
+
+    if dialect_name == "postgresql":
+        ts_query = func.websearch_to_tsquery("simple", cleaned)
+        tsv = func.to_tsvector("simple", func.coalesce(ChatMessage.content, ""))
+        rank = func.ts_rank_cd(tsv, ts_query)
+        snippet = func.ts_headline(
+            "simple",
+            func.coalesce(ChatMessage.content, ""),
+            ts_query,
+            "MaxFragments=2, MinWords=4, MaxWords=18",
+        )
+
+        rows = (
+            db.query(
+                Conversation.thread_id,
+                Conversation.title,
+                ChatMessage.role,
+                ChatMessage.created_at,
+                rank.label("rank"),
+                snippet.label("snippet"),
+            )
+            .join(ChatMessage, ChatMessage.thread_id == Conversation.thread_id)
+            .filter(Conversation.user_id == user_id)
+            .filter(tsv.op("@@")(ts_query))
+            .order_by(rank.desc(), ChatMessage.created_at.desc())
+            .limit(capped_limit)
+            .all()
+        )
+    else:
+        rows = (
+            db.query(
+                Conversation.thread_id,
+                Conversation.title,
+                ChatMessage.role,
+                ChatMessage.created_at,
+                ChatMessage.content.label("snippet"),
+            )
+            .join(ChatMessage, ChatMessage.thread_id == Conversation.thread_id)
+            .filter(Conversation.user_id == user_id)
+            .filter(ChatMessage.content.ilike(f"%{cleaned}%"))
+            .order_by(ChatMessage.created_at.desc())
+            .limit(capped_limit)
+            .all()
+        )
+
+    results = []
+    for row in rows:
+        results.append(
+            {
+                "thread_id": row.thread_id,
+                "title": row.title,
+                "role": row.role,
+                "created_at": row.created_at.isoformat(),
+                "snippet": row.snippet or "",
+            }
+        )
+    return results
 
 
 def save_memory(db: Session, thread_id: str, memory: str):
