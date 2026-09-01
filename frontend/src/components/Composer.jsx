@@ -121,7 +121,7 @@ const Composer = forwardRef(function Composer(
       </div>
 
       <div className="max-w-[764px] mx-auto mt-2.5 text-center font-mono text-[10px] tracking-wide text-text-faint">
-        <kbd className="px-[5px] py-px border border-hairline rounded-[5px] bg-white/[0.03] border-b-2">Enter</kbd> send · <kbd className="px-[5px] py-px border border-hairline rounded-[5px] bg-white/[0.03] border-b-2">Shift+Enter</kbd> newline{streaming && <> · <kbd className="px-[5px] py-px border border-hairline rounded-[5px] bg-white/[0.03] border-b-2">Esc</kbd> stop</>}
+        <kbd className="px-[5px] py-px border border-hairline rounded-[5px] bg-white/[0.03] border-b-2">Enter</kbd> send · <kbd className="px-[5px] py-px border border-hairline rounded-[5px] bg-white/[0.03] border-b-2">Shift+Enter</kbd> newline · <kbd className="px-[5px] py-px border border-hairline rounded-[5px] bg-white/[0.03] border-b-2">Ctrl/Cmd+N</kbd> new · <kbd className="px-[5px] py-px border border-hairline rounded-[5px] bg-white/[0.03] border-b-2">Ctrl/Cmd+K</kbd> search{streaming && <> · <kbd className="px-[5px] py-px border border-hairline rounded-[5px] bg-white/[0.03] border-b-2">Esc</kbd> stop</>}
       </div>
     </>
   )

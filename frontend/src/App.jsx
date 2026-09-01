@@ -9,6 +9,7 @@ import Login from './components/Login.jsx'
 import { listConversations, getMessages, deleteConversation, uploadDocument, streamChat, getModel, getToken, logout, getMe } from './lib/api.js'
 
 const THREAD_KEY = 'aiflow.activeThread'
+const SEARCH_WEB_PROMPT = "What's the latest news in AI research? Search the web."
 
 let toastSeq = 0
 
@@ -260,6 +261,50 @@ export default function App() {
   }
 
   const stop = () => abortRef.current?.abort()
+
+  useEffect(() => {
+    const onGlobalKeyDown = (e) => {
+      if (e.isComposing) return
+      const mod = e.metaKey || e.ctrlKey
+      if (!mod) {
+        if (e.key === 'Escape' && streaming) {
+          e.preventDefault()
+          stop()
+        }
+        return
+      }
+
+      const key = e.key.toLowerCase()
+
+      if (key === 'n') {
+        e.preventDefault()
+        startNew()
+        return
+      }
+
+      if (key === 'k') {
+        e.preventDefault()
+        setDraft(SEARCH_WEB_PROMPT)
+        composerRef.current?.focus()
+        return
+      }
+
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        if (streaming) {
+          stop()
+          return
+        }
+        const text = draft.trim()
+        if (!text) return
+        send(text)
+        setDraft('')
+      }
+    }
+
+    window.addEventListener('keydown', onGlobalKeyDown)
+    return () => window.removeEventListener('keydown', onGlobalKeyDown)
+  }, [draft, send, startNew, stop, streaming])
 
   const pickFile = async (file) => {
     if (upload?.state === 'uploading') return
