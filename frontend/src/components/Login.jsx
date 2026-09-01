@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import posthog from 'posthog-js'
 import { login, register } from '../lib/api.js'
 
 export default function Login({ onAuth }) {
@@ -15,12 +16,23 @@ export default function Login({ onAuth }) {
 
     try {
       if (mode === 'login') {
-        await login(email, password)
+        const data = await login(email, password)
+        const userId = data?.user_id ?? data?.id ?? data?.sub
+        if (userId) {
+          posthog.identify(String(userId), { email })
+        }
+        posthog.capture('user_logged_in')
       } else {
-        await register(email, password)
+        const data = await register(email, password)
+        const userId = data?.user_id ?? data?.id ?? data?.sub
+        if (userId) {
+          posthog.identify(String(userId), { email }, { signup_date: new Date().toISOString() })
+        }
+        posthog.capture('user_signed_up')
       }
       onAuth()
     } catch (err) {
+      posthog.captureException(err)
       setError(err.message)
     } finally {
       setLoading(false)
