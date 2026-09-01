@@ -4,6 +4,7 @@ from pathlib import Path
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
+from langchain_mistralai import ChatMistralAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from langgraph.graph import StateGraph, START, END, MessagesState
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -15,7 +16,7 @@ from agent.utils import systemPrompt
 
 
 def build_model():
-    """Build LLM model, using Google as primary and Groq as fallback."""
+    """Build LLM model, using Google as primary, Mistral as fallback, then Groq."""
     try:
         if settings.google_api_key:
             llm = ChatGoogleGenerativeAI(
@@ -27,6 +28,20 @@ def build_model():
             # Test with a simple call
             llm.invoke([HumanMessage(content="test")])
             return llm, "google"
+    except Exception as e:
+        print(f"Google model failed, falling back to Mistral: {e}")
+
+    try:
+        if settings.mistral_api_key:
+            llm = ChatMistralAI(
+                model=settings.mistral_model,
+                temperature=0.0,
+                api_key=settings.mistral_api_key,
+                max_retries=1,
+            )
+            # Test with a simple call
+            llm.invoke([HumanMessage(content="test")])
+            return llm, "mistral"
     except Exception as e:
         print(f"Google model failed, falling back to Groq: {e}")
 
