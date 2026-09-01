@@ -67,6 +67,7 @@ export default function Sidebar({
         <button
           className="flex items-center gap-2.5 mx-3.5 mt-1.5 mb-1 py-2.5 px-3.5 border border-hairline-strong rounded-xl text-text-dim text-[13.5px] font-medium tracking-wide transition-all hover:border-accent-glow hover:text-accent hover:bg-accent-dim hover:-translate-y-px animate-rise"
           onClick={onNew}
+          title="New conversation (Ctrl/Cmd+N)"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
             <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
