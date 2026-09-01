@@ -36,14 +36,32 @@ export default function Sidebar({
   onSelect,
   onNew,
   onDelete,
+  onExportJson,
+  onExportMarkdown,
   onLogout,
   hostName,
 }) {
   const [, setTick] = useState(0)
+  const [menuThreadId, setMenuThreadId] = useState(null)
+
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 60000)
     return () => clearInterval(id)
   }, [])
+
+  useEffect(() => {
+    if (!menuThreadId) return
+    const closeMenu = () => setMenuThreadId(null)
+    window.addEventListener('click', closeMenu)
+    return () => window.removeEventListener('click', closeMenu)
+  }, [menuThreadId])
+
+  useEffect(() => {
+    if (menuThreadId && !threads.some((t) => t.thread_id === menuThreadId)) {
+      setMenuThreadId(null)
+    }
+  }, [threads, menuThreadId])
+
     return <>
       {/* Mobile backdrop */}
       {open && (
@@ -81,31 +99,79 @@ export default function Sidebar({
             <p className="mx-2.5 my-3.5 text-[13px] leading-relaxed text-text-faint">No conversations yet.<br />Start one — it lands here.</p>
           )}
           {threads.map((t, i) => (
-            <button
+            <div
               key={t.thread_id}
               className={`group relative grid grid-cols-[auto_1fr_auto_auto] items-center gap-2 w-full py-2.5 px-2.5 rounded-[10px] text-left transition-colors hover:bg-white/[0.04] animate-rise ${t.thread_id === activeId ? 'bg-accent-dim' : ''}`}
               style={{ animationDelay: `${0.16 + i * 0.05}s` }}
               onClick={() => onSelect(t.thread_id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onSelect(t.thread_id)
+                }
+              }}
+              role="button"
+              tabIndex={0}
               title={t.title}
             >
               <span className={`w-[3px] h-4 rounded-sm transition-colors ${(t.thread_id === activeId) ? 'bg-accent' : 'bg-transparent'}`} />
               <span className={`text-[13.5px] truncate ${t.thread_id === activeId ? 'text-text' : 'text-text-dim'}`}>{t.title || 'Untitled'}</span>
               <span className="font-mono text-[10px] text-text-faint">{timeAgo(t.updated_at)}</span>
-              <span
-                className="grid place-items-center w-5 h-5 rounded-md text-text-faint opacity-0 hover:text-danger hover:bg-danger/10 transition-all group-hover:opacity-100"
-                role="button"
-                tabIndex={-1}
-                aria-label="Delete conversation"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onDelete(t.thread_id)
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                  <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                </svg>
-              </span>
-            </button>
+              <div className="relative">
+                <button
+                  className="grid place-items-center w-5 h-5 rounded-md text-text-faint opacity-0 hover:text-text hover:bg-white/[0.06] transition-all group-hover:opacity-100"
+                  type="button"
+                  aria-label="Conversation menu"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setMenuThreadId((id) => (id === t.thread_id ? null : t.thread_id))
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                    <circle cx="2" cy="6" r="1" fill="currentColor" />
+                    <circle cx="6" cy="6" r="1" fill="currentColor" />
+                    <circle cx="10" cy="6" r="1" fill="currentColor" />
+                  </svg>
+                </button>
+                {menuThreadId === t.thread_id && (
+                  <div
+                    className="absolute right-0 top-6 min-w-[152px] rounded-lg border border-hairline-strong bg-panel shadow-lg overflow-hidden z-20"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-[12px] text-text-dim hover:bg-white/[0.05] hover:text-text transition-colors"
+                      onClick={() => {
+                        onExportJson(t.thread_id)
+                        setMenuThreadId(null)
+                      }}
+                    >
+                      Export as JSON
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-[12px] text-text-dim hover:bg-white/[0.05] hover:text-text transition-colors"
+                      onClick={() => {
+                        onExportMarkdown(t.thread_id)
+                        setMenuThreadId(null)
+                      }}
+                    >
+                      Export as Markdown
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-[12px] text-danger hover:bg-danger/10 transition-colors"
+                      onClick={() => {
+                        onDelete(t.thread_id)
+                        setMenuThreadId(null)
+                      }}
+                    >
+                      Delete conversation
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           ))}
         </nav>
 
