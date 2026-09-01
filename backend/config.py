@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     google_model: str = "gemini-3.1-flash-lite"
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-120b"
+    mistral_api_key: str = ""
+    mistral_model: str = "mistral-medium-latest"
     tavily_api_key: str = ""
 
     # LangSmith (optional)
