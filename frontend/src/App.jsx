@@ -183,6 +183,68 @@ export default function App() {
     }
   }
 
+  const downloadTextFile = (filename, content, mimeType) => {
+    const blob = new Blob([content], { type: `${mimeType};charset=utf-8` })
+    const href = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = href
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(href)
+  }
+
+  const makeExportFilename = (threadId, extension) => {
+    const thread = threads.find((t) => t.thread_id === threadId)
+    const rawTitle = (thread?.title || '').trim()
+    const safeTitle = rawTitle
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48)
+    const fallback = threadId ? `conversation-${threadId.slice(0, 8)}` : 'conversation'
+    return `${safeTitle || fallback}.${extension}`
+  }
+
+  const buildMarkdownExport = (threadId, entries) => {
+    const thread = threads.find((t) => t.thread_id === threadId)
+    const title = (thread?.title || 'Conversation').trim()
+    const blocks = entries.map((m) => {
+      const role = m.role === 'assistant' ? 'Assistant' : 'User'
+      const timestamp = m.created_at ? ` (${m.created_at})` : ''
+      return `## ${role}${timestamp}\n\n${m.content || ''}`
+    })
+    return [`# ${title}`, '', ...blocks].join('\n\n')
+  }
+
+  const exportConversation = async (threadId, format) => {
+    try {
+      const entries = await getMessages(threadId)
+      if (format === 'json') {
+        const payload = {
+          thread_id: threadId,
+          exported_at: new Date().toISOString(),
+          messages: entries,
+        }
+        downloadTextFile(
+          makeExportFilename(threadId, 'json'),
+          JSON.stringify(payload, null, 2),
+          'application/json'
+        )
+      } else {
+        downloadTextFile(
+          makeExportFilename(threadId, 'md'),
+          buildMarkdownExport(threadId, entries),
+          'text/markdown'
+        )
+      }
+      toast(`Conversation exported as ${format.toUpperCase()}.`, 'success')
+    } catch {
+      toast('Could not export conversation.', 'error')
+    }
+  }
+
   const ensureThreadId = () => {
     let tid = activeId
     if (!tid) {
@@ -312,6 +374,8 @@ export default function App() {
         onSelect={selectThread}
         onNew={startNew}
         onDelete={removeThread}
+        onExportJson={(id) => exportConversation(id, 'json')}
+        onExportMarkdown={(id) => exportConversation(id, 'markdown')}
         onLogout={handleLogout}
         hostName={hostLabel}
       />
