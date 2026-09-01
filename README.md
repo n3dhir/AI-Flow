@@ -75,6 +75,8 @@ Open http://localhost:5173
 | GET | `/api/model` | Get active model |
 | GET | `/api/conversations` | List conversations |
 | GET | `/api/conversations/{id}/messages` | Get messages |
+| GET | `/api/conversations/{id}/documents` | List uploaded documents for a conversation |
+| DELETE | `/api/conversations/{id}/documents` | Delete one uploaded document (by source) |
 | DELETE | `/api/conversations/{id}` | Delete conversation |
 | POST | `/api/chat` | Send message (SSE stream) |
 | POST | `/api/upload` | Upload document |

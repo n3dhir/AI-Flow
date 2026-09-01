@@ -19,9 +19,9 @@ from services import (
     get_chat_history,
 )
 from agent.agent import get_agent
-from agent.rag import add_document_to_rag, delete_thread_documents
+from agent.rag import add_document_to_rag, delete_source_documents, delete_thread_documents, list_thread_documents
 from config import settings
-from schemas import ChatRequest
+from schemas import ChatRequest, DeleteDocumentRequest
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -116,6 +116,51 @@ def get_thread_messages(thread_id: str, current_user=Depends(get_current_user), 
         }
         for m in messages
     ]
+
+
+@router.get("/conversations/{thread_id}/documents")
+async def get_thread_documents(thread_id: str, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    conversation = get_conversation(db, thread_id, current_user.id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    return await run_in_threadpool(list_thread_documents, thread_id)
+
+
+@router.delete("/conversations/{thread_id}/documents")
+async def remove_thread_document(
+    thread_id: str,
+    request: DeleteDocumentRequest,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    conversation = get_conversation(db, thread_id, current_user.id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    source = (request.source or "").strip()
+    if not source:
+        raise HTTPException(status_code=400, detail="Document source is required.")
+
+    await run_in_threadpool(delete_source_documents, thread_id, source)
+
+    safe_source = Path(source).name
+    legacy_prefix = f"{thread_id}_"
+    safe_filename = (
+        safe_source[len(legacy_prefix):]
+        if safe_source.startswith(legacy_prefix)
+        else safe_source
+    )
+    candidates = {
+        Path("uploads") / safe_source,
+        Path("uploads") / thread_id / safe_source,
+        Path("uploads") / f"{thread_id}_{safe_filename}",
+        Path("uploads") / thread_id / safe_filename,
+    }
+    for candidate in candidates:
+        candidate.unlink(missing_ok=True)
+
+    return {"ok": True}
 
 
 @router.delete("/conversations/{thread_id}")
@@ -282,7 +327,12 @@ async def upload_document(
             detail="Unsupported file type. Upload PDF, DOCX, TXT, MD, PY, or CSV.",
         )
 
-    destination = Path("uploads") / f"{thread_id}_{file.filename}"
+    safe_filename = Path(file.filename or "").name
+    if not safe_filename:
+        raise HTTPException(status_code=400, detail="Invalid filename.")
+
+    destination = Path("uploads") / thread_id / safe_filename
+    destination.parent.mkdir(parents=True, exist_ok=True)
     content = await file.read()
     destination.write_bytes(content)
 
