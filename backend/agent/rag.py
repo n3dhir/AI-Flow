@@ -64,6 +64,30 @@ def delete_source_documents(thread_id: str, source: str):
     )
 
 
+def list_thread_documents(thread_id: str) -> list[dict]:
+    from psycopg import Connection
+
+    with Connection.connect(settings.database_url, autocommit=True) as conn:
+        rows = conn.execute(
+            """
+            SELECT cmetadata->>'source' AS source, COUNT(*)::int AS chunks
+            FROM langchain_pg_embedding
+            WHERE cmetadata->>'thread_id' = %s
+              AND cmetadata->>'source' IS NOT NULL
+            GROUP BY cmetadata->>'source'
+            ORDER BY source
+            """,
+            (thread_id,),
+        ).fetchall()
+
+    docs = []
+    legacy_prefix = f"{thread_id}_"
+    for source, chunks in rows:
+        filename = source[len(legacy_prefix):] if source.startswith(legacy_prefix) else source
+        docs.append({"source": source, "filename": filename, "chunks": chunks})
+    return docs
+
+
 def delete_thread_documents(thread_id: str):
     from psycopg import Connection
     with Connection.connect(settings.database_url, autocommit=True) as conn:
@@ -71,6 +95,18 @@ def delete_thread_documents(thread_id: str):
             "DELETE FROM langchain_pg_embedding WHERE cmetadata->>'thread_id' = %s",
             (thread_id,),
         )
+    uploads = Path("uploads")
+    for legacy_file in uploads.glob(f"{thread_id}_*"):
+        legacy_file.unlink(missing_ok=True)
+    thread_dir = uploads / thread_id
+    if thread_dir.exists():
+        for file in thread_dir.iterdir():
+            if file.is_file():
+                file.unlink(missing_ok=True)
+        try:
+            thread_dir.rmdir()
+        except OSError:
+            pass
 
 
 def _get_store():
