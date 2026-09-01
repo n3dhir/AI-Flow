@@ -4,7 +4,7 @@ from pathlib import Path
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import SystemMessage, HumanMessage
 from langgraph.graph import StateGraph, START, END, MessagesState
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.checkpoint.postgres import PostgresSaver
@@ -25,7 +25,7 @@ def build_model():
                 max_retries=1,
             )
             # Test with a simple call
-            llm.invoke([SystemMessage(content="test")])
+            llm.invoke([HumanMessage(content="test")])
             return llm, "google"
     except Exception as e:
         print(f"Google model failed, falling back to Groq: {e}")
