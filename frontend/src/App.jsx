@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import posthog from 'posthog-js'
 import Sidebar from './components/Sidebar.jsx'
 import ChatHeader from './components/ChatHeader.jsx'
 import Message from './components/Message.jsx'
@@ -59,6 +60,8 @@ export default function App() {
   }, [])
 
   const handleLogout = useCallback(() => {
+    posthog.capture('user_logged_out')
+    posthog.reset()
     logout()
     setAuthenticated(false)
     setThreads([])
@@ -70,7 +73,13 @@ export default function App() {
   useEffect(() => {
     if (getToken()) {
       getMe()
-        .then(() => setAuthenticated(true))
+        .then((me) => {
+          setAuthenticated(true)
+          const userId = me?.user_id ?? me?.id ?? me?.sub
+          if (userId) {
+            posthog.identify(String(userId), { email: me?.email })
+          }
+        })
         .catch(() => {
           logout()
           setAuthenticated(false)
@@ -157,6 +166,7 @@ export default function App() {
     if (id === activeId) {
       return
     }
+    posthog.capture('conversation_selected', { thread_id: id })
     setActiveId(id)
     localStorage.setItem(THREAD_KEY, id)
     loadHistory(id)
@@ -177,6 +187,7 @@ export default function App() {
     if (id === activeId) startNew()
     try {
       await deleteConversation(id)
+      posthog.capture('conversation_deleted', { thread_id: id })
       toast('Conversation deleted.')
     } catch {
       toast('Delete failed on server.', 'error')
@@ -187,6 +198,7 @@ export default function App() {
     let tid = activeId
     if (!tid) {
       tid = crypto.randomUUID()
+      posthog.capture('conversation_created', { thread_id: tid })
       setActiveId(tid)
       localStorage.setItem(THREAD_KEY, tid)
     }
@@ -228,6 +240,7 @@ export default function App() {
       }
     }
 
+    posthog.capture('message_sent', { thread_id: tid, message_length: text.length })
     try {
       await streamChat({ threadId: tid, message: text, signal: ctrl.signal, onDelta: append, onEvent })
     } catch (e) {
@@ -237,6 +250,8 @@ export default function App() {
         handleLogout()
       } else {
         const failed = e.status ? `${e.message}` : `Cannot reach backend — ${e.message}`
+        posthog.capture('chat_error', { thread_id: tid, error_message: failed })
+        posthog.captureException(e)
         setMessages((prev) =>
           prev.map((msg) => (msg.id === botMsg.id && !msg.content.trim() ? { ...msg, content: `⚠️ ${failed}` } : msg))
         )
@@ -255,11 +270,15 @@ export default function App() {
   const retry = () => {
     const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
     if (lastUserMsg) {
+      posthog.capture('message_retried', { thread_id: activeId })
       send(lastUserMsg.content)
     }
   }
 
-  const stop = () => abortRef.current?.abort()
+  const stop = () => {
+    posthog.capture('message_stopped', { thread_id: activeId })
+    abortRef.current?.abort()
+  }
 
   const pickFile = async (file) => {
     if (upload?.state === 'uploading') return
@@ -267,11 +286,14 @@ export default function App() {
     setUpload({ name: file.name, state: 'uploading' })
     try {
       const res = await uploadDocument(tid, file)
+      posthog.capture('document_uploaded', { thread_id: tid, chunks: res.chunks, file_type: file.name.split('.').pop() })
       setUpload({ name: file.name, state: 'done', chunks: res.chunks })
       toast(`Indexed "${res.filename}" · ${res.chunks} chunks`, 'success')
       setTimeout(() => setUpload(null), 4000)
       refreshThreads()
     } catch (e) {
+      posthog.capture('document_upload_failed', { thread_id: tid, file_type: file.name.split('.').pop(), error_message: e.message })
+      posthog.captureException(e)
       setUpload({ name: file.name, state: 'error' })
       toast(e.message || 'Upload failed.', 'error')
       setTimeout(() => setUpload(null), 3200)
