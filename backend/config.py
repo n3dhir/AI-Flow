@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     # API Keys
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:1.7b"
+    ollama_think: bool = False
     google_api_key: str = ""
     google_model: str = "gemini-3.1-flash-lite"
     groq_api_key: str = ""
