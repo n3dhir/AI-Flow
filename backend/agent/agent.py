@@ -3,6 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_ollama import ChatOllama
 from langchain_groq import ChatGroq
 from langchain_mistralai import ChatMistralAI
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -16,7 +17,20 @@ from agent.utils import systemPrompt
 
 
 def build_model():
-    """Build LLM model, using Google as primary, Mistral as fallback, then Groq."""
+    """Build LLM model, using Ollama as primary, then Google, Mistral, and Groq."""
+    try:
+        if settings.ollama_model:
+            llm = ChatOllama(
+                model=settings.ollama_model,
+                base_url=settings.ollama_base_url,
+                temperature=0.0,
+            )
+            # Test with a simple call
+            llm.invoke([HumanMessage(content="test")])
+            return llm, "ollama"
+    except Exception as e:
+        print(f"Ollama model failed, falling back to Google: {e}")
+
     try:
         if settings.google_api_key:
             llm = ChatGoogleGenerativeAI(
