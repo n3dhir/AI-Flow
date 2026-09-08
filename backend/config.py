@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 7
 
     # API Keys
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "qwen3:1.7b"
     google_api_key: str = ""
     google_model: str = "gemini-3.1-flash-lite"
     groq_api_key: str = ""
