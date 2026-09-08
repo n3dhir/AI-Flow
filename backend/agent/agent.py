@@ -24,6 +24,7 @@ def build_model():
                 model=settings.ollama_model,
                 base_url=settings.ollama_base_url,
                 temperature=0.0,
+                reasoning=settings.ollama_think,
             )
             # Test with a simple call
             llm.invoke([HumanMessage(content="test")])
