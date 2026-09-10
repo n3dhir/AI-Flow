@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     mistral_model: str = "mistral-medium-latest"
     tavily_api_key: str = ""
 
+    # Voice (STT/TTS, optional — binaries must exist on the backend host)
+    whisper_bin: str = ""
+    whisper_model: str = ""
+    audio_tmp_dir: str = "uploads/voice_tmp"
+    ffmpeg_bin: str = "ffmpeg"
+    stt_timeout_s: int = 120
+    stt_max_mb: int = 25
+
     # LangSmith (optional)
     langsmith_tracing: bool = False
     langsmith_endpoint: str = "https://api.smith.langchain.com"

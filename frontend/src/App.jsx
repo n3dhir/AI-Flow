@@ -8,8 +8,10 @@ import EmptyState from './components/EmptyState.jsx'
 import Toasts from './components/Toasts.jsx'
 import Login from './components/Login.jsx'
 import { listConversations, getMessages, deleteConversation, uploadDocument, streamChat, getModel, getToken, logout, getMe } from './lib/api.js'
+import { transcribeAudio, pickRecordingMime } from './lib/voice.js'
 
 const THREAD_KEY = 'aiflow.activeThread'
+const MAX_REC_SECS = 120
 
 let toastSeq = 0
 
@@ -38,12 +40,15 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [draft, setDraft] = useState('')
   const [modelName, setModelName] = useState('')
+  const [recState, setRecState] = useState('idle') // idle | recording | transcribing
+  const [recSecs, setRecSecs] = useState(0)
   const hostLabel = modelName.includes('gemini') ? 'google ai' : modelName ? 'frellmapi' : ''
 
   const abortRef = useRef(null)
   const scrollRef = useRef(null)
   const stickRef = useRef(true)
   const composerRef = useRef(null)
+  const recRef = useRef(null)
   const lastMsg = messages[messages.length - 1]
   const [canRetry, setCanRetry] = useState(false)
 
@@ -173,6 +178,7 @@ export default function App() {
   }
 
   const startNew = () => {
+    cancelRecording()
     abortRef.current?.abort()
     setActiveId(null)
     localStorage.removeItem(THREAD_KEY)
@@ -206,7 +212,7 @@ export default function App() {
   }
 
   const send = async (text) => {
-    if (streaming) return
+    if (streaming) return null
     const tid = ensureThreadId()
     const stamp = Date.now()
     const userMsg = { id: `u-${stamp}`, role: 'user', content: text, ts: new Date().toISOString() }
@@ -241,8 +247,9 @@ export default function App() {
     }
 
     posthog.capture('message_sent', { thread_id: tid, message_length: text.length })
+    let reply = null
     try {
-      await streamChat({ threadId: tid, message: text, signal: ctrl.signal, onDelta: append, onEvent })
+      reply = await streamChat({ threadId: tid, message: text, signal: ctrl.signal, onDelta: append, onEvent })
     } catch (e) {
       if (e.name === 'AbortError') {
         append('\n\n_(stopped)_')
@@ -265,6 +272,7 @@ export default function App() {
       )
       refreshThreads()
     }
+    return reply
   }
 
   const retry = () => {
@@ -276,8 +284,107 @@ export default function App() {
   }
 
   const stop = () => {
+    cancelRecording()
     posthog.capture('message_stopped', { thread_id: activeId })
     abortRef.current?.abort()
+  }
+
+  const cancelRecording = () => {
+    const r = recRef.current
+    if (!r) return
+    clearInterval(r.timer)
+    try {
+      r.recorder.onstop = null
+      if (r.recorder.state !== 'inactive') r.recorder.stop()
+    } catch {
+      /* already stopped */
+    }
+    r.stream.getTracks().forEach((t) => t.stop())
+    recRef.current = null
+    setRecState('idle')
+    setRecSecs(0)
+  }
+
+  const startRecording = async () => {
+    if (recState !== 'idle' || streaming) return
+    if (!window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      toast('Microphone needs HTTPS or localhost.', 'error')
+      return
+    }
+    if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      toast('Voice recording is not supported in this browser.', 'error')
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mime = pickRecordingMime()
+      const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
+      const chunks = []
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size) chunks.push(e.data)
+      }
+      const startedAt = Date.now()
+      const timer = setInterval(() => {
+        const secs = Math.floor((Date.now() - startedAt) / 1000)
+        setRecSecs(secs)
+        if (secs >= MAX_REC_SECS) stopRecordingAndSend(false)
+      }, 500)
+      recRef.current = { stream, recorder, chunks, timer, startedAt }
+      recorder.start(200)
+      setRecSecs(0)
+      setRecState('recording')
+      posthog.capture('voice_recording_started', { thread_id: activeId })
+    } catch {
+      toast('Microphone access denied. Allow mic permission and try again.', 'error')
+      posthog.capture('voice_recording_failed', { reason: 'mic_denied' })
+    }
+  }
+
+  const stopRecordingAndSend = async (cancelled = false) => {
+    const r = recRef.current
+    if (!r) return
+    clearInterval(r.timer)
+    const secs = Math.floor((Date.now() - r.startedAt) / 1000)
+    const blob = await new Promise((resolve) => {
+      r.recorder.onstop = () => resolve(new Blob(r.chunks, { type: r.recorder.mimeType || 'audio/webm' }))
+      try {
+        r.recorder.stop()
+      } catch {
+        resolve(new Blob([]))
+      }
+    })
+    r.stream.getTracks().forEach((t) => t.stop())
+    recRef.current = null
+    setRecState('idle')
+    setRecSecs(0)
+    posthog.capture('voice_recording_stopped', { duration_s: secs, cancelled })
+    if (cancelled) return
+    if (!blob.size || secs < 1) {
+      toast('Recording too short — hold the mic button while speaking.', 'error')
+      return
+    }
+    const tid = ensureThreadId()
+    const ctrl = new AbortController()
+    abortRef.current = ctrl
+    setRecState('transcribing')
+    try {
+      const transcript = await transcribeAudio({ blob, threadId: tid, signal: ctrl.signal })
+      posthog.capture('voice_transcribed', { thread_id: tid, chars: transcript.length })
+      if (!transcript.trim()) {
+        toast('Could not understand the recording. Try again.', 'error')
+        return
+      }
+      // Place transcript in the composer for review/edit — user sends manually.
+      setDraft(transcript.trim())
+      composerRef.current?.focus()
+    } catch (e) {
+      if (e.name === 'AbortError') return
+      posthog.capture('voice_transcribe_failed', { error_message: e.message })
+      toast(e.status ? e.message : `Cannot reach backend — ${e.message}`, 'error')
+    } finally {
+      setRecState('idle')
+      if (abortRef.current === ctrl) abortRef.current = null
+    }
   }
 
   const pickFile = async (file) => {
@@ -375,6 +482,11 @@ export default function App() {
           onSend={send}
           onStop={stop}
           onPickFile={pickFile}
+          recState={recState}
+          recSecs={recSecs}
+          onMicStart={startRecording}
+          onMicStop={() => stopRecordingAndSend(false)}
+          onMicCancel={() => stopRecordingAndSend(true)}
         />
       </main>
 

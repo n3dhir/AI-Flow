@@ -59,6 +59,15 @@ def purge_checkpoints(thread_id: str):
 def friendly_error(exc: Exception) -> str:
     message = str(exc)
 
+    if "exceed_context_size" in message or "exceeds the available context" in message:
+        return (
+            "\n\n⚠️ **Conversation too large for the local model.**\n\n"
+            "Options:\n"
+            "- Start a new conversation to clear history\n"
+            "- Ask your admin to raise the Ollama context size (`num_ctx`)\n"
+            "- Or set `GOOGLE_MODEL` in `backend/.env` to use a cloud model with a larger window"
+        )
+
     if "429" in message or "Rate limit" in message:
         return (
             "\n\n⚠️ **LLM provider rate limit reached.**\n\n"

@@ -1,9 +1,11 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { formatRecTime } from '../lib/voice.js'
 
 const Composer = forwardRef(function Composer(
-  { value, onValueChange, streaming, upload, onSend, onStop, onPickFile },
+  { value, onValueChange, streaming, upload, onSend, onStop, onPickFile, recState, recSecs, onMicStart, onMicStop, onMicCancel },
   ref
 ) {
+  const busy = streaming || recState === 'transcribing'
   const textareaRef = useRef(null)
   const fileRef = useRef(null)
 
@@ -24,7 +26,7 @@ const Composer = forwardRef(function Composer(
 
   const submit = () => {
     const text = value.trim()
-    if (!text || streaming) return
+    if (!text || streaming || recState !== 'idle') return
     onSend(text)
     onValueChange('')
   }
@@ -87,10 +89,52 @@ const Composer = forwardRef(function Composer(
           }}
         />
 
+        {recState === 'recording' ? (
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              className="grid place-items-center w-[37px] h-[37px] rounded-xl bg-danger/15 text-danger border border-danger/50 animate-pulse shrink-0"
+              title="Release to send"
+              onPointerUp={onMicStop}
+              onPointerCancel={onMicCancel}
+              onContextMenu={(e) => e.preventDefault()}
+            >
+              <span className="w-3 h-3 rounded-[3px] bg-danger" />
+            </button>
+            <span className="font-mono text-[12px] text-danger tabular-nums">{formatRecTime(recSecs)}</span>
+            <button
+              className="grid place-items-center w-[28px] h-[28px] rounded-lg text-text-faint hover:text-danger hover:bg-danger/10 transition-colors shrink-0"
+              title="Cancel recording"
+              onClick={onMicCancel}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+        ) : (
+          <button
+            className={`grid place-items-center w-[37px] h-[37px] rounded-xl transition-all shrink-0 ${recState === 'transcribing' ? 'text-accent animate-pulse cursor-wait' : 'text-text-faint hover:text-accent hover:bg-accent-dim disabled:opacity-40 disabled:cursor-default'}`}
+            title={recState === 'transcribing' ? 'Transcribing…' : 'Hold to talk, release to send'}
+            onPointerDown={(e) => {
+              e.preventDefault()
+              onMicStart()
+            }}
+            onPointerUp={onMicStop}
+            onPointerCancel={onMicCancel}
+            onContextMenu={(e) => e.preventDefault()}
+            disabled={busy || upload?.state === 'uploading'}
+          >
+            <svg width="17" height="17" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+              <rect x="6" y="1.5" width="6" height="10" rx="3" stroke="currentColor" strokeWidth="1.3" />
+              <path d="M3.5 8.5a5.5 5.5 0 0 0 11 0M9 14v2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
+
         <textarea
           ref={textareaRef}
           rows={1}
-          placeholder="Ask anything — or attach a document…"
+          placeholder="Ask anything — type, attach, or hold mic to talk…"
           value={value}
           onChange={(e) => onValueChange(e.target.value)}
           onKeyDown={onKeyDown}
@@ -110,7 +154,7 @@ const Composer = forwardRef(function Composer(
             className="grid place-items-center w-[38px] h-[38px] rounded-[13px] bg-accent text-[#07271f] shrink-0 transition-all hover:brightness-110 hover:-translate-y-0.5 hover:shadow-[0_6px_18px_-6px_var(--color-accent-glow)] disabled:bg-white/[0.07] disabled:text-text-faint disabled:cursor-default disabled:translate-y-0 disabled:shadow-none"
             title="Send (Enter)"
             onClick={submit}
-            disabled={!value.trim()}
+            disabled={!value.trim() || busy}
           >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path d="M2 8h11M9 3.5L13.5 8 9 12.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
@@ -121,7 +165,7 @@ const Composer = forwardRef(function Composer(
       </div>
 
       <div className="max-w-[764px] mx-auto mt-2.5 text-center font-mono text-[10px] tracking-wide text-text-faint">
-        <kbd className="px-[5px] py-px border border-hairline rounded-[5px] bg-white/[0.03] border-b-2">Enter</kbd> send · <kbd className="px-[5px] py-px border border-hairline rounded-[5px] bg-white/[0.03] border-b-2">Shift+Enter</kbd> newline{streaming && <> · <kbd className="px-[5px] py-px border border-hairline rounded-[5px] bg-white/[0.03] border-b-2">Esc</kbd> stop</>}
+        <kbd className="px-[5px] py-px border border-hairline rounded-[5px] bg-white/[0.03] border-b-2">Enter</kbd> send · <kbd className="px-[5px] py-px border border-hairline rounded-[5px] bg-white/[0.03] border-b-2">Shift+Enter</kbd> newline{streaming && <> · <kbd className="px-[5px] py-px border border-hairline rounded-[5px] bg-white/[0.03] border-b-2">Esc</kbd> stop</>}{!streaming && (recState === 'recording' ? <> · hold mic, release to send</> : recState === 'transcribing' ? <> · transcribing…</> : <> · hold mic to talk</>)}
       </div>
     </>
   )
