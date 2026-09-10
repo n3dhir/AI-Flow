@@ -11,9 +11,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI
+import requests
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from config import settings
 from api import auth_router, chat_router, voice_router
@@ -38,6 +40,59 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(voice_router)
+
+# Headers that describe the transport of one hop and must not be copied on.
+_DROPPED_RESPONSE_HEADERS = {
+    "content-encoding",
+    "content-length",
+    "transfer-encoding",
+    "connection",
+    "keep-alive",
+}
+
+
+@app.api_route("/ingest/{path:path}", methods=["GET", "POST", "OPTIONS", "HEAD"])
+async def posthog_proxy(path: str, request: Request):
+    """Forward PostHog capture traffic through the app origin.
+
+    The browser SDK sends events to this same-origin path instead of the
+    PostHog cloud host, so ad blockers that block that host let the events
+    pass. Static assets go to the assets host; all other paths go to the
+    ingestion host.
+    """
+    if path.startswith("static/"):
+        upstream = settings.posthog_assets_host
+    else:
+        upstream = settings.posthog_ingestion_host
+
+    body = await request.body()
+    forward_headers = {
+        key: value
+        for key, value in request.headers.items()
+        if key.lower() not in ("host", "content-length")
+    }
+
+    upstream_response = await run_in_threadpool(
+        lambda: requests.request(
+            request.method,
+            f"{upstream}/{path}",
+            params=request.query_params.multi_items(),
+            data=body,
+            headers=forward_headers,
+            timeout=30,
+        )
+    )
+
+    return Response(
+        content=upstream_response.content,
+        status_code=upstream_response.status_code,
+        headers={
+            key: value
+            for key, value in upstream_response.headers.items()
+            if key.lower() not in _DROPPED_RESPONSE_HEADERS
+        },
+    )
+
 
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "dist")
 app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")

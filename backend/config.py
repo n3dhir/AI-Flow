@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     # CORS
     allowed_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
+    # PostHog reverse proxy upstream hosts (US region)
+    posthog_ingestion_host: str = "https://us.i.posthog.com"
+    posthog_assets_host: str = "https://us-assets.i.posthog.com"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
