@@ -17,6 +17,7 @@ const phHost = import.meta.env.VITE_POSTHOG_HOST
 if (phKey && phHost) {
   posthog.init(phKey, {
     api_host: phHost,
+    ui_host: 'https://us.posthog.com',
     defaults: '2026-05-30',
   })
 } else if (import.meta.env.DEV) {
