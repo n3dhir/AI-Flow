@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from config import settings
-from api import auth_router, chat_router
+from api import auth_router, chat_router, voice_router
 
 
 @asynccontextmanager
@@ -37,6 +37,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(chat_router)
+app.include_router(voice_router)
 
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "dist")
 app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
