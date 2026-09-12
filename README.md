@@ -35,6 +35,13 @@ DATABASE_URL="postgresql://user:pass@localhost:5432/aiflow"
 
 JWT_SECRET_KEY="your-secret-key"
 ALLOWED_ORIGINS=["http://localhost:5173"]
+
+# Voice input (optional). Set all three on every host that serves /api/stt,
+# then restart the backend. When any is missing, voice transcription returns
+# 503 and the backend logs a warning at startup.
+WHISPER_BIN="/path/to/whisper-cli"
+WHISPER_MODEL="/path/to/ggml-base.en.bin"
+FFMPEG_BIN="ffmpeg"
 ```
 
 ### 2. Database setup
