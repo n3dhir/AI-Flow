@@ -1,3 +1,4 @@
+import logging
 import re
 import shutil
 import subprocess
@@ -12,9 +13,15 @@ from core.security import get_current_user
 
 router = APIRouter(prefix="/api", tags=["voice"])
 
+logger = logging.getLogger(__name__)
+
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 ALLOWED_AUDIO_SUFFIXES = {".webm", ".wav", ".mp3", ".m4a", ".ogg", ".opus", ".flac"}
+
+# Shown to the user for any host-side failure. It never names an env var or a
+# binary path, because those are backend configuration details.
+_UNAVAILABLE_DETAIL = "Voice transcription is unavailable right now. Try again later."
 
 # whisper.cpp txt lines look like: "[00:00:00.000 --> 00:00:05.000]  hello"
 _TIMESTAMP_LINE = re.compile(r"^\[.*?\-\->.*?\]\s*")
@@ -28,34 +35,42 @@ def _audio_tmp_dir() -> Path:
     return d
 
 
-def _resolve_exe(configured: str, label: str, env_var: str) -> str:
-    """Return a usable binary path or raise 503 with setup instructions."""
+def _resolve_exe(configured: str) -> str | None:
+    """Return a usable binary path, or None when it is not on the host."""
     configured = (configured or "").strip()
     if configured and Path(configured).is_file():
         return configured
-    found = shutil.which(configured) if configured else None
-    if found:
-        return found
-    raise HTTPException(
-        status_code=503,
-        detail=(
-            f"{label} is not configured on the backend host. "
-            f"Set {env_var} to the binary path and restart the backend."
-        ),
-    )
+    return shutil.which(configured) if configured else None
 
 
-def _resolve_whisper_model() -> str:
-    configured = (settings.whisper_model or "").strip()
+def _resolve_model(configured: str) -> str | None:
+    """Return the ggml model path, or None when the file is missing."""
+    configured = (configured or "").strip()
     if configured and Path(configured).is_file():
         return configured
-    raise HTTPException(
-        status_code=503,
-        detail=(
-            "Whisper model is not configured on the backend host. "
-            "Set WHISPER_MODEL to the ggml .bin path and restart the backend."
-        ),
-    )
+    return None
+
+
+def resolve_voice_tools() -> tuple[str | None, str | None, str | None, list[str]]:
+    """Resolve the transcription dependencies against the host.
+
+    Returns the whisper binary, model and ffmpeg paths (None when absent) plus
+    the names of the settings that are missing. The names are empty when the
+    host can transcribe. Used by the endpoint and the startup health check.
+    """
+    whisper_bin = _resolve_exe(settings.whisper_bin)
+    whisper_model = _resolve_model(settings.whisper_model)
+    ffmpeg = _resolve_exe(settings.ffmpeg_bin)
+    missing = [
+        name
+        for name, resolved in (
+            ("WHISPER_BIN", whisper_bin),
+            ("WHISPER_MODEL", whisper_model),
+            ("FFMPEG_BIN", ffmpeg),
+        )
+        if not resolved
+    ]
+    return whisper_bin, whisper_model, ffmpeg, missing
 
 
 def _parse_whisper_txt(txt_path: Path) -> str:
@@ -92,9 +107,12 @@ async def transcribe_audio(
     if not data:
         raise HTTPException(status_code=400, detail="Empty audio upload.")
 
-    whisper_bin = _resolve_exe(settings.whisper_bin, "Whisper", "WHISPER_BIN")
-    whisper_model = _resolve_whisper_model()
-    ffmpeg = _resolve_exe(settings.ffmpeg_bin, "ffmpeg", "FFMPEG_BIN")
+    whisper_bin, whisper_model, ffmpeg, missing = resolve_voice_tools()
+    if missing:
+        logger.error(
+            "Voice transcription unavailable — host is missing: %s", ", ".join(missing)
+        )
+        raise HTTPException(status_code=503, detail=_UNAVAILABLE_DETAIL)
 
     tmp_dir = _audio_tmp_dir()
     in_path = tmp_dir / f"stt_in_{uuid.uuid4().hex}{suffix}"
@@ -117,10 +135,12 @@ async def transcribe_audio(
         except subprocess.TimeoutExpired:
             raise HTTPException(status_code=504, detail="Audio conversion timed out.")
         if conv.returncode != 0 or not conv_path.is_file() or conv_path.stat().st_size == 0:
-            tail = (conv.stderr or "")[-300:].strip()
+            logger.warning(
+                "ffmpeg could not decode the upload: %s", (conv.stderr or "").strip()[-500:]
+            )
             raise HTTPException(
                 status_code=400,
-                detail=f"Could not decode the recording. Record again.{' ' + tail if tail else ''}",
+                detail="Could not decode the recording. Record again.",
             )
         cmd = [
             whisper_bin,
@@ -142,10 +162,14 @@ async def transcribe_audio(
                 detail=f"Transcription timed out after {settings.stt_timeout_s}s. Try a shorter recording.",
             )
         if proc.returncode != 0 or not out_txt.is_file():
-            tail = (proc.stderr or "")[-500:].strip()
+            logger.error(
+                "whisper transcription failed (rc=%s): %s",
+                proc.returncode,
+                (proc.stderr or "").strip()[-500:],
+            )
             raise HTTPException(
                 status_code=500,
-                detail=f"Transcription failed.{' ' + tail if tail else ''}",
+                detail="Transcription failed. Try again.",
             )
         transcript = await run_in_threadpool(lambda: _parse_whisper_txt(out_txt))
         if not transcript:

@@ -19,12 +19,20 @@ from starlette.concurrency import run_in_threadpool
 
 from config import settings
 from api import auth_router, chat_router, voice_router
+from api.voice import resolve_voice_tools
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if not settings.google_api_key:
         print("WARNING: GOOGLE_API_KEY is not set — chat requests will fail.")
+    missing_voice = resolve_voice_tools()[3]
+    if missing_voice:
+        print(
+            "WARNING: voice transcription is disabled — host is missing "
+            + ", ".join(missing_voice)
+            + ". /api/stt will return 503 until these are set."
+        )
     yield
 
 
